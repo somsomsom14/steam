@@ -13,9 +13,9 @@ type GameCarouselProps = {
 
 export function GameCarousel({ cards }: GameCarouselProps) {
   return (
-    <div className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[600px] w-full -translate-x-1/2 -translate-y-[48%] [perspective:2000px] [perspective-origin:50%_50%]">
+    <div className="absolute left-1/2 top-1/2 z-[5] h-[600px] w-full -translate-x-1/2 -translate-y-[48%] [perspective:2000px] [perspective-origin:50%_50%] [&:has(article:hover)_.carousel-track]:[animation-play-state:paused]">
       {/* 회전축 = 이 점 하나 (0×0 허브) */}
-      <div className="absolute left-1/2 top-1/2 h-0 w-0 [transform-style:preserve-3d] [animation:rotate-carousel_60s_linear_infinite] hover:[animation-play-state:paused]">
+      <div className="carousel-track absolute left-1/2 top-1/2 h-0 w-0 [transform-style:preserve-3d] [animation:rotate-carousel_60s_linear_infinite]">
         {cards.map((card, index) => {
           const cardStyle: CSSProperties = {
             left: -CARD_W / 2,
@@ -29,16 +29,16 @@ export function GameCarousel({ cards }: GameCarouselProps) {
           return (
             <article
               key={card.id}
-              className="absolute overflow-hidden border border-border-high bg-surface [backface-visibility:hidden] max-[1024px]:h-[330px] max-[1024px]:w-[220px]"
+              className="group pointer-events-auto absolute overflow-hidden border border-border-high bg-surface [backface-visibility:hidden] max-[1024px]:h-[330px] max-[1024px]:w-[220px]"
               style={cardStyle}
             >
-              <div className="group/image relative h-full w-full">
+              <div className="relative h-full w-full">
                 <Image
                   src={card.image}
                   alt={card.title}
                   fill
                   sizes="(max-width: 1024px) 220px, 280px"
-                  className="object-cover opacity-70 grayscale-[40%] contrast-110 transition-[filter,opacity] duration-500 group-hover/image:opacity-100 group-hover/image:grayscale-0 group-hover/image:contrast-100"
+                  className="object-cover opacity-70 grayscale-[40%] contrast-110 transition-[filter,opacity] duration-500 group-hover:opacity-100 group-hover:grayscale-0 group-hover:contrast-100"
                 />
               </div>
             </article>
