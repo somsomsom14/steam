@@ -10,7 +10,13 @@
   --border-high: rgba(45, 212, 191, 0.4);
   --font-main: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "SF Mono", "Roboto Mono", ui-monospace, monospace;
+  --font-space-mono: "Space Mono", ui-monospace, monospace;
   --carousel-depth: 600px;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #475569;
+  --border-service: rgba(45, 212, 191, 0.2);
+  --border-service-highlight: rgba(45, 212, 191, 0.5);
+  --accent-glow: rgba(45, 212, 191, 0.4);
 }
 
 @theme inline {
@@ -56,5 +62,30 @@ body {
   }
   to {
     transform: rotateY(360deg);
+  }
+}
+
+@keyframes services-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes services-pulse {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(0.95);
   }
 }

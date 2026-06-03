@@ -13,10 +13,10 @@ export function HeroContent() {
       </p>
       <div className="pointer-events-auto">
         <a
-          href="#"
+          href="/api/auth/steam/login"
           className="group relative inline-flex min-h-[78px] min-w-[210px] items-center justify-center overflow-hidden bg-accent px-[88px] py-[30px] text-center text-[1.1rem] font-bold tracking-[0.05em] text-bg transition-[transform,box-shadow] duration-200 [transition-timing-function:cubic-bezier(0.2,0,0,1)] hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(45,212,191,0.3)]"
         >
-          우리 팀 찾으러 가기
+          우리 팀 찾기
           <span className="pointer-events-none absolute inset-y-0 left-[-100%] w-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] transition-[left] duration-500 group-hover:left-full" />
         </a>
       </div>
