@@ -10,5 +10,6 @@ CREATE INDEX IF NOT EXISTS idx_schedule_participants_schedule
   ON room_schedule_participants(schedule_id);
 
 ALTER TABLE room_schedule_participants ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "schedule_participants_select" ON room_schedule_participants;
 CREATE POLICY "schedule_participants_select"
   ON room_schedule_participants FOR SELECT USING (true);

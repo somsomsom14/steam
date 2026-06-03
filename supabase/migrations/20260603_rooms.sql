@@ -60,10 +60,28 @@ CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_messages_room_id_created ON room_messages(room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_room_schedules_room_id ON room_schedules(room_id);
 
--- Enable Realtime (run once; ignore "already exists" error)
-ALTER PUBLICATION supabase_realtime ADD TABLE room_messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
-ALTER PUBLICATION supabase_realtime ADD TABLE room_members;
+-- Enable Realtime (idempotent — already in publication이면 건너뜀)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'room_messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE room_messages;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'rooms'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE rooms;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'room_members'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE room_members;
+  END IF;
+END $$;
 
 -- RLS
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
@@ -75,9 +93,15 @@ ALTER TABLE game_metadata ENABLE ROW LEVEL SECURITY;
 
 -- SELECT open for all (needed for realtime with anon key)
 -- All writes go through API routes using service_role key (bypasses RLS)
+DROP POLICY IF EXISTS "rooms_select" ON rooms;
 CREATE POLICY "rooms_select" ON rooms FOR SELECT USING (true);
+DROP POLICY IF EXISTS "room_members_select" ON room_members;
 CREATE POLICY "room_members_select" ON room_members FOR SELECT USING (true);
+DROP POLICY IF EXISTS "room_messages_select" ON room_messages;
 CREATE POLICY "room_messages_select" ON room_messages FOR SELECT USING (true);
+DROP POLICY IF EXISTS "room_schedules_select" ON room_schedules;
 CREATE POLICY "room_schedules_select" ON room_schedules FOR SELECT USING (true);
+DROP POLICY IF EXISTS "room_banned_select" ON room_banned;
 CREATE POLICY "room_banned_select" ON room_banned FOR SELECT USING (true);
+DROP POLICY IF EXISTS "game_metadata_select" ON game_metadata;
 CREATE POLICY "game_metadata_select" ON game_metadata FOR SELECT USING (true);
