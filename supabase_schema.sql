@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.user_games (
   tags             JSONB       DEFAULT '[]'::jsonb,
   playtime_forever INTEGER     DEFAULT 0,
   playtime_2weeks  INTEGER     DEFAULT 0,
+  store_price_krw  INTEGER,
   source           TEXT        DEFAULT 'owned',
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, appid)
@@ -59,4 +60,4 @@ CREATE INDEX IF NOT EXISTS idx_user_achievements_appid   ON public.user_achievem
 
 -- 프로필 이미지 Storage 버킷: supabase/migrations/20260604_avatars_storage.sql 실행
 -- AI 문의방: supabase/migrations/20260606_chat.sql 실행
--- 환경 변수: GEMINI_API_KEY (Gemini 2.5 Flash)
+-- 환경 변수: GEMINI_API_KEY, GEMINI_MODEL (기본 gemini-2.5-flash-lite, 폴백 gemini-2.5-flash)

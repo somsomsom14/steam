@@ -46,12 +46,18 @@ export type DashboardStats = {
   totalPlaytimeHours: number;
 };
 
+export type LeastPlayedGame = {
+  name: string;
+  playtimeForeverMinutes: number;
+};
+
 export type DashboardAnalysis = {
   stats: DashboardStats;
   radar: RadarPoint[];
   genres: GenreSlice[];
   playPreference: PlayPreference[];
   topGames: TopGameBar[];
+  leastPlayed: LeastPlayedGame | null;
   recentGames: { name: string; playtime2WeeksHours: number }[];
   topTrait: string | null;
   multiPercent: number;

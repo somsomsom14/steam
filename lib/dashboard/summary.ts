@@ -1,51 +1,91 @@
 import type { DashboardAnalysis } from "./types";
-import { formatPercent } from "./format";
+import { formatHours } from "./format";
 
-const TRAIT_SUMMARY: Record<string, string> = {
-  협동: "협동 게임 선호도가 높습니다.",
-  공포: "공포·호러 장르에 플레이 시간이 많이 쏠려 있습니다.",
-  경쟁: "경쟁·PvP 위주의 플레이 성향이 뚜렷합니다.",
-  생존: "생존·크래프팅 게임을 즐기는 플레이어입니다.",
-  전술: "전략·베이스 빌딩 등 전술적 플레이를 선호합니다.",
-  소셜: "파티·소셜 디덕션 게임을 자주 즐깁니다.",
+/** Steam DNA 상위 성향 → 감성 한 줄 */
+const TRAIT_PERSONALITY: Record<string, string> = {
+  협동: "팀과 함께할 때 가장 빛나는 플레이어예요. 🤝",
+  공포: "심장이 쫄깃해지는 순간을 즐기는 타입이에요. 👻",
+  경쟁: "당신은 이기는 것에 진심인 플레이어입니다. 🏆",
+  생존: "끝까지 살아남는 데 몰입하는 서바이벌러예요. 🏕️",
+  전술: "한 수 앞을 읽는 전략가 스타일이에요. 🧠",
+  소셜: "사람들과 어울리며 게임하는 걸 좋아해요. 🎭",
 };
 
-export function buildAnalysisSummary(analysis: DashboardAnalysis): {
-  headline: string;
-  preferenceLine: string;
-  recentIntro: string;
-  recentClosing: string | null;
-  recentItems: string[];
-  hasRecent: boolean;
-} {
+/** 보유 게임 수 구간별 훅 */
+function libraryTierMessage(count: number): string | null {
+  if (count <= 0) return null;
+  const n = count.toLocaleString("ko-KR");
+  if (count <= 20) return `${n}개의 게임, 아직 채워가는 중이에요!`;
+  if (count <= 50) return `${n}개의 게임, 다양한 장르를 즐기는 플레이어네요!`;
+  if (count <= 100) return `${n}개의 게임, 게임에 진심인 플레이어네요!`;
+  if (count <= 200) return `${n}개의 게임, 컬렉터 수준이에요!`;
+  return `${n}개의 게임, 이건 박물관인가요..? 🏛️`;
+}
+
+function formatHoursCasual(minutes: number): string {
+  const h = Math.round(minutes / 60);
+  return h >= 1 ? `${h.toLocaleString("ko-KR")}시간` : `${minutes}분`;
+}
+
+export type AnalysisSummary = {
+  headline: string | null;
+  libraryLine: string | null;
+  totalPlayLine: string | null;
+  topTraitLine: { trait: string; percent: number } | null;
+  topGenreLine: { genre: string; percent: number } | null;
+  topGameLine: { name: string; hoursLabel: string } | null;
+};
+
+export function buildAnalysisSummary(analysis: DashboardAnalysis): AnalysisSummary {
+  const { stats, topGames } = analysis;
   const topRadar = analysis.radar.find((r) => r.trait === analysis.topTrait);
+  const topRadarByMinutes = [...analysis.radar].sort((a, b) => b.rawMinutes - a.rawMinutes)[0];
+  const topGenre = analysis.genres[0];
 
   const headline =
     analysis.topTrait && topRadar && topRadar.rawMinutes > 0
-      ? `당신은 ${TRAIT_SUMMARY[analysis.topTrait] ?? `${analysis.topTrait} 성향이 가장 두드러집니다.`}`
-      : "아직 뚜렷한 플레이 성향이 잡히지 않았습니다.";
+      ? TRAIT_PERSONALITY[analysis.topTrait] ??
+        `${analysis.topTrait} 성향이 당신을 가장 잘 설명해요.`
+      : null;
 
-  const multiHigher = analysis.multiPercent >= analysis.singlePercent;
-  const dominantPercent = multiHigher
-    ? analysis.multiPercent
-    : analysis.singlePercent;
-  const modeLabel = multiHigher ? "멀티플레이" : "싱글플레이";
+  const libraryLine = libraryTierMessage(stats.libraryCount);
 
-  const preferenceLine =
-    dominantPercent > 0
-      ? `전체 플레이 시간의 ${formatPercent(dominantPercent)}가 ${modeLabel} 게임에 집중되어 있습니다.`
-      : "싱글·멀티 플레이 비율을 계산할 데이터가 부족합니다.";
+  const totalPlayLine =
+    stats.totalPlaytimeMinutes > 0
+      ? `총 ${formatHours(stats.totalPlaytimeMinutes)}을 게임과 함께했어요.`
+      : null;
 
-  const hasRecent = analysis.recentGames.length > 0;
+  const topTraitLine =
+    topRadarByMinutes && topRadarByMinutes.rawMinutes > 0
+      ? {
+          trait: topRadarByMinutes.trait,
+          percent: Math.round(topRadarByMinutes.value),
+        }
+      : null;
+
+  const topGenreLine =
+    topGenre && topGenre.minutes > 0 && topGenre.genre !== "Unknown"
+      ? {
+          genre: topGenre.genre,
+          percent: Math.round(topGenre.percent),
+        }
+      : null;
+
+  const top = topGames[0];
+  const topGameLine =
+    top && top.playtimeForeverMinutes > 0
+      ? {
+          name: top.name,
+          hoursLabel: formatHoursCasual(top.playtimeForeverMinutes),
+        }
+      : null;
 
   return {
     headline,
-    preferenceLine,
-    recentIntro: hasRecent
-      ? "최근 2주 동안"
-      : "최근 2주 동안 플레이한 게임 기록이 없습니다.",
-    recentClosing: hasRecent ? "위주로 플레이했습니다." : null,
-    recentItems: analysis.recentGames.map((g) => g.name),
-    hasRecent,
+    libraryLine,
+    totalPlayLine,
+    topTraitLine,
+    topGenreLine,
+    topGameLine,
   };
 }

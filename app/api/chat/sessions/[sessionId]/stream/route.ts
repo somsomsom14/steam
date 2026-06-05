@@ -83,6 +83,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       let intent = "일반문의";
 
       try {
+        send({ type: "status", message: "응답 생성 중" });
+
         const generator = runChatPipeline({
           userId: session.userId,
           userMessage: content,

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { RoomsHeroGridScene } from "@/components/rooms/RoomsHeroGridScene";
 import "@/components/dashboard/dashboard.css";
 import "./rooms.css";
 
@@ -73,25 +74,33 @@ type Props = {
 
 export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: Props) {
   const [rooms, setRooms] = useState<RoomRow[]>(initialRooms);
-  const [query, setQuery] = useState("");
+  const [titleQuery, setTitleQuery] = useState("");
+  const [gameQuery, setGameQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchRooms = useCallback(async (q: string) => {
+  const fetchRooms = useCallback(async (title: string, game: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/rooms?q=${encodeURIComponent(q)}`);
+      const params = new URLSearchParams();
+      if (title.trim()) params.set("title", title.trim());
+      if (game.trim()) params.set("game", game.trim());
+      const qs = params.toString();
+      const res = await fetch(qs ? `/api/rooms?${qs}` : "/api/rooms");
       if (res.ok) setRooms(await res.json());
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchRooms(query), 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, fetchRooms]);
+  const runSearch = useCallback(() => {
+    void fetchRooms(titleQuery, gameQuery);
+  }, [titleQuery, gameQuery, fetchRooms]);
+
+  const clearSearch = useCallback(() => {
+    setTitleQuery("");
+    setGameQuery("");
+    void fetchRooms("", "");
+  }, [fetchRooms]);
 
   return (
     <div className="dashboard-shell">
@@ -100,7 +109,7 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
       <div className="dashboard-right">
         {/* Topbar */}
         <header className="dashboard-topbar">
-          <a href="/" className="dashboard-mobile-logo">MI-TEAM</a>
+          <a href="/dashboard" className="dashboard-mobile-logo">MI-TEAM</a>
           <a href="/profile" className="dashboard-topbar__profile" style={{ textDecoration: "none", cursor: "pointer" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <ProfileAvatar src={avatarUrl} alt="" className="dashboard-topbar__avatar" />
@@ -115,28 +124,77 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
         </header>
 
         {/* Content */}
-        <div className="dashboard-dark" style={{ flex: 1, overflowY: "auto" }}>
-          <div className="rooms-top">
-            <div className="rooms-search-wrap">
-              <svg className="rooms-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="7" /><path d="M20 20l-3-3" />
-              </svg>
-              <input
-                className="rooms-search"
-                placeholder="게임명으로 검색"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+        <div className="dashboard-dark rooms-page" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+          <header className="rooms-hero">
+            <RoomsHeroGridScene />
+            <div className="rooms-hero__inner">
+              <div className="rooms-hero__center">
+                <div className="rooms-hero__tagline">
+                  <p>게임을 선택하고,</p>
+                  <p>함께할 팀원을 만나보세요</p>
+                </div>
+                <Link href="/rooms/new" className="rooms-create-btn rooms-create-btn--hero">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  방 만들기
+                </Link>
+              </div>
             </div>
-            <Link href="/rooms/new" className="rooms-create-btn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              방 만들기
-            </Link>
-          </div>
+          </header>
 
-          {loading && <div className="rooms-loading">검색 중...</div>}
+          <div className="rooms-search-bar">
+            <div className="rooms-search-bar__filters">
+              <form
+                className="rooms-filter-group"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  runSearch();
+                }}
+              >
+                <span className="rooms-filter-group__label">게임</span>
+                <input
+                  className="rooms-search"
+                  placeholder="게임명"
+                  value={gameQuery}
+                  onChange={(e) => setGameQuery(e.target.value)}
+                />
+                <button type="submit" className="rooms-btn rooms-btn--primary" disabled={loading}>
+                  검색
+                </button>
+              </form>
+
+              <form
+                className="rooms-filter-group"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  runSearch();
+                }}
+              >
+                <span className="rooms-filter-group__label">방 제목</span>
+                <input
+                  className="rooms-search"
+                  placeholder="방 이름"
+                  value={titleQuery}
+                  onChange={(e) => setTitleQuery(e.target.value)}
+                />
+                <button type="submit" className="rooms-btn rooms-btn--primary" disabled={loading}>
+                  검색
+                </button>
+              </form>
+
+              {(titleQuery || gameQuery) && (
+                <button
+                  type="button"
+                  className="rooms-btn rooms-btn--ghost"
+                  onClick={clearSearch}
+                  disabled={loading}
+                >
+                  초기화
+                </button>
+              )}
+            </div>
+          </div>
 
           {!loading && rooms.length === 0 && (
             <div className="rooms-empty">

@@ -56,7 +56,7 @@ export function FigmaHorizontalBars({ items, maxHours }: Props) {
           return (
             <div key={item.fullName} className="figma-hbars__row">
               <span className="figma-hbars__name" title={item.fullName}>
-                {item.name}
+                {item.fullName}
               </span>
               <div className="figma-hbars__bars">
                 <div className="figma-hbars__bar-track">

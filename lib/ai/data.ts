@@ -1,15 +1,29 @@
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { resolveDisplayName } from "@/lib/user-profile";
 import type { RoomForRecommend, UserGameRecord } from "./types";
 
 export async function fetchUserGames(userId: string): Promise<UserGameRecord[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("user_games")
-    .select("appid, game_name, genres, categories, tags, playtime_forever")
+    .select(
+      "appid, game_name, genres, categories, tags, playtime_forever, playtime_2weeks, store_price_krw"
+    )
     .eq("user_id", userId);
 
   if (error) throw new Error(error.message);
   return (data ?? []) as UserGameRecord[];
+}
+
+export async function fetchUserDisplayName(userId: string): Promise<string> {
+  const supabase = createSupabaseServerClient();
+  const { data } = await supabase
+    .from("users")
+    .select("app_nickname, steam_nickname")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return data ? resolveDisplayName(data) : "게이머";
 }
 
 export async function fetchRoomsForRecommend(): Promise<RoomForRecommend[]> {

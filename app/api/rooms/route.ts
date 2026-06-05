@@ -5,7 +5,9 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
   const supabase = createSupabaseServerClient();
-  const q = req.nextUrl.searchParams.get("q") ?? "";
+  const titleQ = req.nextUrl.searchParams.get("title")?.trim() ?? "";
+  const gameQ = req.nextUrl.searchParams.get("game")?.trim() ?? "";
+  const legacyQ = req.nextUrl.searchParams.get("q")?.trim() ?? "";
 
   let query = supabase
     .from("rooms")
@@ -16,7 +18,18 @@ export async function GET(req: NextRequest) {
     `)
     .order("created_at", { ascending: false });
 
-  if (q) query = query.ilike("game_name", `%${q}%`);
+  const sanitize = (s: string) => s.replace(/[%_,]/g, "");
+
+  if (titleQ) {
+    query = query.ilike("title", `%${sanitize(titleQ)}%`);
+  }
+  if (gameQ) {
+    query = query.ilike("game_name", `%${sanitize(gameQ)}%`);
+  }
+  if (!titleQ && !gameQ && legacyQ) {
+    const pattern = `%${sanitize(legacyQ)}%`;
+    query = query.or(`title.ilike.${pattern},game_name.ilike.${pattern}`);
+  }
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

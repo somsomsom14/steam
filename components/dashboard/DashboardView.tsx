@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Cell,
   Pie,
@@ -49,8 +50,9 @@ function RadarAxisTick(props: {
       y={y + oy}
       textAnchor="middle"
       dominantBaseline="central"
-      fill={FIGMA.textMuted}
-      fontSize={15}
+      fill="rgba(255, 255, 255, 0.9)"
+      fontSize={17}
+      fontWeight={600}
     >
       {props.payload?.value ?? ""}
     </text>
@@ -83,8 +85,7 @@ function getEmptyStateMessage(
   if (libraryCount === 0) {
     return {
       title: "Steam 라이브러리가 아직 동기화되지 않았습니다",
-      description:
-        "온보딩에서 ‘분석하고 시작하기’를 눌러 게임 목록을 가져와 주세요. ‘나중에 하기’로 건너뛰면 대시보드에 데이터가 없습니다.",
+      description: "",
       action: { href: "/onboarding", label: "Steam 동기화 하기" },
     };
   }
@@ -104,23 +105,12 @@ function getEmptyStateMessage(
   };
 }
 
-function DonutTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: { payload: { genre: string; percent: number; minutes: number } }[];
-}) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
-  return (
-    <div className="dashboard-chart-tooltip">
-      <div>{d.genre}</div>
-      <div>{formatPercent(d.percent)}</div>
-      <div style={{ opacity: 0.7 }}>{formatHours(d.minutes)}</div>
-    </div>
-  );
-}
+type GenreChartItem = {
+  genre: string;
+  minutes: number;
+  percent: number;
+  fill: string;
+};
 
 export function DashboardView({
   displayName,
@@ -138,15 +128,16 @@ export function DashboardView({
     fullMark: 100,
   }));
 
-  const genreData = analysis.genres.slice(0, 4).map((g, i) => ({
+  const genreData: GenreChartItem[] = analysis.genres.slice(0, 4).map((g, i) => ({
     ...g,
     fill: FIGMA.donut[i % FIGMA.donut.length],
   }));
 
-  const topGenre = genreData[0];
+  const [selectedGenreIndex, setSelectedGenreIndex] = useState(0);
+  const selectedGenre = genreData[selectedGenreIndex] ?? genreData[0];
 
   const topGamesForBars = analysis.topGames.map((g) => ({
-    name: g.name.length > 22 ? `${g.name.slice(0, 20)}…` : g.name,
+    name: g.name,
     fullName: g.name,
     hours: g.playtimeForeverHours,
     recent: g.playtime2WeeksHours,
@@ -158,7 +149,7 @@ export function DashboardView({
   );
 
   const playPrefGlass = analysis.playPreference.map((p) => ({
-    label: p.label === "Single Player" ? "Single Player" : "Multi Player",
+    label: p.label === "Single Player" ? "Single Play" : "Multi Play",
     percent: p.percent,
   }));
 
@@ -168,17 +159,9 @@ export function DashboardView({
 
       <div className="dashboard-right">
         <header className="dashboard-topbar">
-          <a href="/" className="dashboard-mobile-logo">
+          <a href="/dashboard" className="dashboard-mobile-logo">
             MI-TEAM
           </a>
-          <div className="dashboard-topbar__bell-wrap">
-            <span className="dashboard-topbar__bell-dot" />
-            <button type="button" className="dashboard-topbar__bell" aria-label="알림">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z" />
-              </svg>
-            </button>
-          </div>
           <a href="/profile" className="dashboard-topbar__profile" style={{ textDecoration: "none", cursor: "pointer" }}>
             <ProfileAvatar
               src={avatarUrl}
@@ -245,131 +228,144 @@ export function DashboardView({
           {!hasCharts && emptyState ? (
             <div className="dashboard-empty dashboard-empty--inline">
               <p className="dashboard-empty__title">{emptyState.title}</p>
-              <p className="dashboard-empty__desc">{emptyState.description}</p>
+              {emptyState.description ? (
+                <p className="dashboard-empty__desc">{emptyState.description}</p>
+              ) : null}
               <DashboardResyncButton label={emptyState.action?.label ?? "Steam 다시 동기화"} />
-              {emptyState.action?.href === "/onboarding" && (
-                <p className="dashboard-empty__hint">
-                  또는{" "}
-                  <a href="/onboarding" className="dashboard-empty__link">
-                    온보딩 페이지
-                  </a>
-                  에서 설정할 수 있어요.
-                </p>
-              )}
             </div>
           ) : (
           <div className="dashboard-charts">
-            {/* ① Steam DNA */}
-            <section className="dashboard-panel dashboard-panel--d1 dashboard-charts__radar">
-              <div className="dashboard-panel__heading">Steam DNA</div>
-              <div className="radar-wrap">
-                <ResponsiveContainer width="100%" height={520}>
-                  <RadarChart
-                    data={radarData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius="65%"
-                    margin={{ top: 56, right: 72, bottom: 56, left: 72 }}
-                  >
-                  <defs>
-                    <linearGradient id="figmaRadarGrad" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor={FIGMA.pink} stopOpacity={0.75} />
-                      <stop offset="100%" stopColor="#818cf8" stopOpacity={0.35} />
-                    </linearGradient>
-                  </defs>
-                  <PolarGrid gridType="polygon" />
-                  <PolarAngleAxis
-                    dataKey="trait"
-                    tick={RadarAxisTick}
-                    tickLine={false}
-                  />
-                  <PolarRadiusAxis
-                    angle={90}
-                    domain={[0, 100]}
-                    tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 10 }}
-                    tickCount={5}
-                    axisLine={false}
-                  />
-                  <Radar
-                    dataKey="score"
-                    stroke={FIGMA.pink}
-                    fill="url(#figmaRadarGrad)"
-                    strokeWidth={2}
-                    dot={{ fill: FIGMA.pink, r: 3 }}
-                    isAnimationActive
-                    animationDuration={ANIMATION_MS}
-                    animationEasing="ease-out"
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.[0]) return null;
-                      const d = payload[0].payload as { trait: string; score: number };
-                      return (
-                        <div className="dashboard-chart-tooltip">
-                          <div>{d.trait}</div>
-                          <div style={{ color: FIGMA.green }}>{d.score} / 100</div>
-                        </div>
-                      );
-                    }}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+            {/* ① 상단 좌: Genre Distribution */}
+            <section className="dashboard-panel dashboard-panel--d1 dashboard-charts__donut">
+              <div className="dashboard-panel__heading">Game Types</div>
+              <div className="donut-layout">
+                <div className="donut-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={genreData}
+                        dataKey="minutes"
+                        nameKey="genre"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={82}
+                        outerRadius={118}
+                        paddingAngle={2}
+                        stroke="#ffffff"
+                        isAnimationActive
+                        animationDuration={ANIMATION_MS}
+                        animationEasing="ease-out"
+                        style={{ cursor: "pointer" }}
+                        onClick={(_, index) => {
+                          if (typeof index === "number") setSelectedGenreIndex(index);
+                        }}
+                      >
+                        {genreData.map((entry, index) => (
+                          <Cell
+                            key={entry.genre}
+                            fill={entry.fill}
+                            stroke={selectedGenreIndex === index ? "#ffffff" : "transparent"}
+                            strokeWidth={selectedGenreIndex === index ? 2 : 0}
+                          />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {selectedGenre && (
+                    <div className="donut-center">
+                      <span className="donut-center__pct">
+                        {formatPercent(selectedGenre.percent)}
+                      </span>
+                      <span className="donut-center__label">{selectedGenre.genre}</span>
+                      <span className="donut-center__time">
+                        {formatHours(selectedGenre.minutes)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="donut-legend">
+                  {genreData.map((g, index) => (
+                    <button
+                      key={g.genre}
+                      type="button"
+                      className={`donut-legend__item${selectedGenreIndex === index ? " is-active" : ""}`}
+                      onClick={() => setSelectedGenreIndex(index)}
+                    >
+                      <span className="donut-legend__dot" style={{ background: g.fill }} />
+                      <span>{g.genre}</span>
+                      <span className="donut-legend__pct">{formatPercent(g.percent)}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </section>
 
-            {/* ② Top Playtime — 2중 가로 막대 */}
+            {/* ② 상단 우: Top Playtime */}
             <section className="dashboard-panel dashboard-panel--d2 dashboard-charts__hbars">
               <div className="dashboard-panel__heading">Top Playtime Games</div>
               <FigmaHorizontalBars items={topGamesForBars} maxHours={maxBarHours} />
             </section>
 
-            {/* ③④⑤ 하단 3열: Donut | Play Preference | AI Summary */}
+            {/* ③④⑤ 하단: Steam DNA | Play Preference | AI Summary */}
             <div className="dashboard-charts__bottom">
-              <section className="dashboard-panel dashboard-panel--d3 dashboard-charts__donut">
-                <div className="dashboard-panel__heading">Genre Distribution</div>
-                <div className="donut-layout">
-                  <div className="donut-wrap">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie
-                          data={genreData}
-                          dataKey="minutes"
-                          nameKey="genre"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={82}
-                          outerRadius={118}
-                          paddingAngle={2}
-                          strokeWidth={0}
-                          isAnimationActive
-                          animationDuration={ANIMATION_MS}
-                          animationEasing="ease-out"
-                        >
-                          {genreData.map((entry) => (
-                            <Cell key={entry.genre} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<DonutTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {topGenre && (
-                      <div className="donut-center">
-                        <span className="donut-center__pct">
-                          {formatPercent(topGenre.percent)}
-                        </span>
-                        <span className="donut-center__label">{topGenre.genre}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="donut-legend">
-                    {genreData.map((g) => (
-                      <div key={g.genre} className="donut-legend__item">
-                        <span className="donut-legend__dot" style={{ background: g.fill }} />
-                        <span>{g.genre}</span>
-                        <span className="donut-legend__pct">{formatPercent(g.percent)}</span>
-                      </div>
-                    ))}
-                  </div>
+              <section className="dashboard-panel dashboard-panel--d3 dashboard-charts__radar">
+                <div className="dashboard-panel__heading">Play Style</div>
+                <div className="radar-wrap">
+                  <ResponsiveContainer width="100%" height={380}>
+                    <RadarChart
+                      data={radarData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius="68%"
+                      margin={{ top: 32, right: 40, bottom: 32, left: 40 }}
+                    >
+                    <defs>
+                      <linearGradient id="figmaRadarGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={FIGMA.pink} stopOpacity={0.75} />
+                        <stop offset="100%" stopColor="#818cf8" stopOpacity={0.35} />
+                      </linearGradient>
+                    </defs>
+                    <PolarGrid
+                      gridType="polygon"
+                      stroke="rgba(255, 255, 255, 0.28)"
+                      strokeWidth={1.25}
+                    />
+                    <PolarAngleAxis
+                      dataKey="trait"
+                      tick={RadarAxisTick}
+                      tickLine={false}
+                    />
+                    <PolarRadiusAxis
+                      angle={90}
+                      domain={[0, 100]}
+                      tick={{ fill: "rgba(255, 255, 255, 0.62)", fontSize: 13, fontWeight: 500 }}
+                      tickCount={5}
+                      axisLine={false}
+                    />
+                    <Radar
+                      dataKey="score"
+                      stroke={FIGMA.pink}
+                      fill="url(#figmaRadarGrad)"
+                      strokeWidth={2.5}
+                      dot={{ fill: FIGMA.pink, r: 3 }}
+                      isAnimationActive
+                      animationDuration={ANIMATION_MS}
+                      animationEasing="ease-out"
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.[0]) return null;
+                        const d = payload[0].payload as { trait: string; score: number };
+                        return (
+                          <div className="dashboard-chart-tooltip">
+                            <div>{d.trait}</div>
+                            <div style={{ color: FIGMA.green }}>{d.score} / 100</div>
+                          </div>
+                        );
+                      }}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
                 </div>
               </section>
 

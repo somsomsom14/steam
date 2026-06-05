@@ -1,6 +1,5 @@
-import { classifyIntent, GENERAL_INQUIRY_SYSTEM } from "./orchestrator";
-import { fetchRoomsForRecommend, fetchUserGames } from "./data";
-import { streamChatResponse } from "./gemini";
+import { runOrchestrator } from "./orchestrator";
+import { fetchRoomsForRecommend, fetchUserDisplayName, fetchUserGames } from "./data";
 import { runGameRecommendAgent } from "./agents/game-recommend";
 import { runRoomRecommendAgent } from "./agents/room-recommend";
 import { runUserAnalysisAgent } from "./agents/user-analysis";
@@ -10,14 +9,22 @@ export type PipelineMeta = {
   intent: ChatIntent;
 };
 
-/** Multi-Agent 파이프라인 — Orchestrator → 전문 Agent 또는 직접 응답 */
+const GENERAL_FALLBACK =
+  "MI-TEAM AI 상담소입니다. 게임 추천, 방 추천, Steam 성향 분석, 서비스 이용 문의를 도와드릴 수 있어요.";
+
+/** Orchestrator(Gemini) → 전문 Agent 또는 일반 문의 직접 응답 */
 export async function* runChatPipeline(params: {
   userId: string;
   userMessage: string;
   history: ChatHistoryMessage[];
 }): AsyncGenerator<string, PipelineMeta> {
-  const intent = await classifyIntent(params.userMessage, params.history);
+  const { intent, generalReply } = await runOrchestrator(params.userMessage, params.history);
   const priorHistory = params.history;
+
+  if (intent === "일반문의") {
+    yield generalReply?.trim() || GENERAL_FALLBACK;
+    return { intent: "일반문의" };
+  }
 
   switch (intent) {
     case "게임추천": {
@@ -43,21 +50,20 @@ export async function* runChatPipeline(params: {
       return { intent };
     }
     case "성향분석": {
-      const games = await fetchUserGames(params.userId);
+      const [games, displayName] = await Promise.all([
+        fetchUserGames(params.userId),
+        fetchUserDisplayName(params.userId),
+      ]);
       yield* runUserAnalysisAgent({
         userMessage: params.userMessage,
         games,
+        displayName,
         history: priorHistory,
       });
       return { intent };
     }
-    case "일반문의":
     default: {
-      yield* streamChatResponse({
-        systemInstruction: GENERAL_INQUIRY_SYSTEM,
-        userPrompt: params.userMessage,
-        history: priorHistory,
-      });
+      yield generalReply?.trim() || GENERAL_FALLBACK;
       return { intent: "일반문의" };
     }
   }

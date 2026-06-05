@@ -5,7 +5,14 @@ import { resolveAvatarUrl, resolveDisplayName } from "@/lib/user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase";
 import { ChatClient } from "./ChatClient";
 
-export default async function ChatPage() {
+type PageProps = {
+  searchParams: Promise<{ autostart?: string }>;
+};
+
+export default async function ChatPage({ searchParams }: PageProps) {
+  const { autostart } = await searchParams;
+  const autoStartMessage =
+    autostart === "analysis" ? "게임 성향 분석해줘" : null;
   const cookieStore = await cookies();
   const token = cookieStore.get("session")?.value;
   if (!token) redirect("/");
@@ -51,6 +58,7 @@ export default async function ChatPage() {
       initialSessions={sessionList}
       initialSessionId={activeId ?? null}
       initialMessages={initialMessages}
+      autoStartMessage={autoStartMessage}
     />
   );
 }

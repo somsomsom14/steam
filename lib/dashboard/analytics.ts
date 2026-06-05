@@ -1,6 +1,7 @@
 import {
+  isExcludedGenre,
   MULTI_CATEGORIES,
-  SINGLE_CATEGORY,
+  SINGLE_PLAYER_CATEGORIES,
   TRAIT_TAG_MAP,
 } from "./constants";
 import { minutesToHours } from "./format";
@@ -81,7 +82,10 @@ function computeRadar(games: UserGameRow[]): RadarPoint[] {
 function computeGenres(games: UserGameRow[]): GenreSlice[] {
   const totals: Record<string, number> = {};
   for (const game of games) {
-    const genres = game.genres.length > 0 ? game.genres : ["Unknown"];
+    const raw = game.genres.length > 0 ? game.genres : ["Unknown"];
+    const genres = raw.filter((g) => !isExcludedGenre(g));
+    if (genres.length === 0) continue;
+
     for (const genre of genres) {
       totals[genre] = (totals[genre] ?? 0) + game.playtime_forever;
     }
@@ -103,26 +107,31 @@ function computePlayPreference(games: UserGameRow[]): PlayPreference[] {
 
   for (const game of games) {
     const isMulti = matchesCategory(game.categories, MULTI_CATEGORIES);
-    const isSingle = matchesCategory(game.categories, [SINGLE_CATEGORY]);
+    const isSingle = matchesCategory(game.categories, SINGLE_PLAYER_CATEGORIES);
+    const minutes = game.playtime_forever;
 
-    if (isMulti) {
-      multiMinutes += game.playtime_forever;
+    if (isMulti && isSingle) {
+      const half = minutes / 2;
+      multiMinutes += half;
+      singleMinutes += half;
+    } else if (isMulti) {
+      multiMinutes += minutes;
     } else if (isSingle) {
-      singleMinutes += game.playtime_forever;
+      singleMinutes += minutes;
     }
   }
 
-  const total = singleMinutes + multiMinutes || 1;
+  const classifiedTotal = singleMinutes + multiMinutes || 1;
   return [
     {
       label: "Single Player",
       minutes: singleMinutes,
-      percent: (singleMinutes / total) * 100,
+      percent: (singleMinutes / classifiedTotal) * 100,
     },
     {
       label: "Multi Player",
       minutes: multiMinutes,
-      percent: (multiMinutes / total) * 100,
+      percent: (multiMinutes / classifiedTotal) * 100,
     },
   ];
 }
@@ -139,6 +148,25 @@ function computeTopGames(games: UserGameRow[]): TopGameBar[] {
       playtimeForeverHours: minutesToHours(g.playtime_forever),
       playtime2WeeksHours: minutesToHours(g.playtime_2weeks),
     }));
+}
+
+function computeLeastPlayed(
+  games: UserGameRow[],
+  topAppid: number | undefined
+): { name: string; playtimeForeverMinutes: number } | null {
+  const played = games.filter(
+    (g) => g.playtime_forever > 0 && g.appid !== topAppid
+  );
+  if (played.length === 0) return null;
+
+  const min = played.reduce((a, b) =>
+    a.playtime_forever < b.playtime_forever ? a : b
+  );
+
+  return {
+    name: min.game_name ?? `App ${min.appid}`,
+    playtimeForeverMinutes: min.playtime_forever,
+  };
 }
 
 function computeRecentGames(games: UserGameRow[]) {
@@ -165,6 +193,8 @@ export function analyzeGames(games: UserGameRow[]): DashboardAnalysis {
   const genres = computeGenres(analyzable);
   const playPreference = computePlayPreference(analyzable);
   const topGames = computeTopGames(analyzable);
+  const topAppid = topGames[0]?.appid;
+  const leastPlayed = computeLeastPlayed(analyzable, topAppid);
   const recentGames = computeRecentGames(analyzable);
 
   const topTrait =
@@ -185,6 +215,7 @@ export function analyzeGames(games: UserGameRow[]): DashboardAnalysis {
     genres,
     playPreference,
     topGames,
+    leastPlayed,
     recentGames,
     topTrait,
     multiPercent: multi?.percent ?? 0,

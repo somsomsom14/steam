@@ -1,3 +1,5 @@
+import { parseKrwRegularPriceFromStoreData } from "./steam/library-value";
+
 // ─── 타입 ───────────────────────────────────────────────────────────────────
 
 export type OwnedGame = {
@@ -228,18 +230,72 @@ export async function getRecentlyPlayedGames(
   }));
 }
 
+// ─── Steam Store search (게임명 → appid, 게임당 API 1회) ─────────────────────
+
+function normalizeStoreSearchName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+type StoreSearchItem = { id?: number; name?: string; type?: string };
+
+/** Steam Store Search API — 추천 게임명으로 appid 1건 조회 */
+export async function searchSteamStoreAppId(gameName: string): Promise<number | null> {
+  const term = gameName.trim();
+  if (!term) return null;
+
+  const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(term)}&l=korean&cc=kr`;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as { items?: StoreSearchItem[] };
+    const items = data.items ?? [];
+    if (!items.length) return null;
+
+    const q = normalizeStoreSearchName(term);
+
+    const exact = items.find(
+      (i) => typeof i.id === "number" && i.name && normalizeStoreSearchName(i.name) === q
+    );
+    if (exact?.id) return exact.id;
+
+    const contains = items.find(
+      (i) =>
+        typeof i.id === "number" &&
+        i.name &&
+        (normalizeStoreSearchName(i.name).includes(q) || q.includes(normalizeStoreSearchName(i.name)))
+    );
+    if (contains?.id) return contains.id;
+
+    const app = items.find((i) => typeof i.id === "number" && (!i.type || i.type === "app"));
+    return app?.id ?? (typeof items[0]?.id === "number" ? items[0].id : null);
+  } catch {
+    return null;
+  }
+}
+
 // ─── Steam Store API ─────────────────────────────────────────────────────────
 
 export async function getAppDetails(
   appId: number
-): Promise<{ game_name?: string; genres: string[]; categories: string[] }> {
-  const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&filters=basic,genres,categories&cc=us&l=english`;
+): Promise<{
+  game_name?: string;
+  genres: string[];
+  categories: string[];
+  /** 한국 스토어 정가(원). 무료=0, 미조회=null */
+  store_price_krw: number | null;
+}> {
+  /* cc=kr: KRW 정가 · l=english: genres/categories는 영문 고정(대시보드·분석 매칭) */
+  const url = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=kr&l=english`;
   try {
     const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return { genres: [], categories: [] };
+    if (!res.ok) return { genres: [], categories: [], store_price_krw: null };
     const data = await res.json();
     const appData = data[String(appId)];
-    if (!appData?.success || !appData?.data) return { genres: [], categories: [] };
+    if (!appData?.success || !appData?.data) {
+      return { genres: [], categories: [], store_price_krw: null };
+    }
+    const { priceKrw } = parseKrwRegularPriceFromStoreData(appData.data);
     return {
       game_name: appData.data.name as string | undefined,
       genres:
@@ -250,9 +306,10 @@ export async function getAppDetails(
         appData.data.categories?.map(
           (c: { description: string }) => c.description
         ) ?? [],
+      store_price_krw: priceKrw,
     };
   } catch {
-    return { genres: [], categories: [] };
+    return { genres: [], categories: [], store_price_krw: null };
   }
 }
 
@@ -288,3 +345,13 @@ export async function getPlayerAchievements(
     return [];
   }
 }
+
+// ─── 라이브러리 총 자산 가치 (KRW 정가, UI 미포함) ─────────────────────────────
+export {
+  fetchAppKrwRegularPrice,
+  fetchLibraryKrwValue,
+  parseKrwRegularPriceFromStoreData,
+  sumLibraryKrwFromStoredPrices,
+  type AppKrwPrice,
+  type LibraryKrwValueResult,
+} from "./steam/library-value";

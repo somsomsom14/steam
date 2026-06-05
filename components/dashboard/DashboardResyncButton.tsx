@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+const STEAM_PROFILE_PRIVATE_MSG =
+  "Steam 프로필·게임 상세가 비공개입니다 Steam 프로필보기 → 프로필 편집 → 공개설정 → 프로필: 공개로 변경후 다시 동기화해 주세요.";
+
 export function DashboardResyncButton({ label = "Steam 다시 동기화" }: { label?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -19,9 +22,7 @@ export function DashboardResyncButton({ label = "Steam 다시 동기화" }: { la
         return;
       }
       if (data.profile_public === false) {
-        setError(
-          "Steam 프로필·게임 상세가 비공개입니다. Steam 설정에서 공개로 변경 후 다시 동기화해 주세요."
-        );
+        setError(STEAM_PROFILE_PRIVATE_MSG);
         router.refresh();
         return;
       }

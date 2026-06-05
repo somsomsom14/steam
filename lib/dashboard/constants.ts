@@ -32,12 +32,47 @@ export const TRAIT_LABEL_EN: Record<string, string> = {
   소셜: "Social",
 };
 
+/** Steam Store categories — 영문 + 기존 한글 동기화 데이터 호환 */
 export const MULTI_CATEGORIES = [
   "Multi-player",
+  "멀티플레이어",
   "Online Co-op",
+  "온라인 협동",
   "Local Co-op",
+  "로컬 협동",
+  "Shared/Split Screen Co-op",
+  "화면 분할 협동",
   "Co-op",
+  "협동",
   "MMO",
 ];
 
+export const SINGLE_PLAYER_CATEGORIES = [
+  "Single-player",
+  "싱글 플레이어",
+];
+
+/** @deprecated SINGLE_PLAYER_CATEGORIES 사용 */
 export const SINGLE_CATEGORY = "Single-player";
+
+/** Steam Store genres — 실제 장르가 아닌 라벨 (Genre Distribution 제외) */
+export const EXCLUDED_GENRES = [
+  "Free to Play",
+  "무료 플레이",
+  "Early Access",
+  "얼리 액세스",
+  "Sexual Content",
+  "성적 콘텐츠",
+  "Nudity",
+  "노출",
+  "Massively Multiplayer",
+  "대규모 멀티플레이어",
+] as const;
+
+const EXCLUDED_GENRES_LOWER = new Set(
+  EXCLUDED_GENRES.map((g) => g.toLowerCase())
+);
+
+export function isExcludedGenre(genre: string): boolean {
+  return EXCLUDED_GENRES_LOWER.has(genre.toLowerCase());
+}

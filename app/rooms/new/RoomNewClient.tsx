@@ -85,7 +85,7 @@ export function RoomNewClient({ games, displayName, avatarUrl, steamId }: Props)
       <div className="dashboard-right">
         {/* Topbar */}
         <header className="dashboard-topbar">
-          <a href="/" className="dashboard-mobile-logo">MI-TEAM</a>
+          <a href="/dashboard" className="dashboard-mobile-logo">MI-TEAM</a>
           <a href="/profile" className="dashboard-topbar__profile" style={{ textDecoration: "none", cursor: "pointer" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <ProfileAvatar src={avatarUrl} alt="" className="dashboard-topbar__avatar" />

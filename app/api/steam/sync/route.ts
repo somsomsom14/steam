@@ -24,6 +24,8 @@ type EnrichedGame = {
   playtime_forever: number;
   playtime_2weeks: number;
   source: string;
+  /** 한국 스토어 정가(원). 무료=0, 미조회=null */
+  store_price_krw: number | null;
 };
 
 type MetaFailure = { appid: number; game_name: string; reasons: string[] };
@@ -44,6 +46,7 @@ async function upsertGameRows(
     playtime_forever: number;
     playtime_2weeks: number;
     source: string;
+    store_price_krw?: number | null;
   }[]
 ): Promise<SaveFailure[]> {
   const saveFailures: SaveFailure[] = [];
@@ -156,10 +159,12 @@ export async function POST(_req: NextRequest) {
         let tags: string[] = [];
 
         let resolvedName = game.name;
+        let store_price_krw: number | null = null;
         try {
           const details = await getAppDetails(game.appid);
           genres = details.genres;
           categories = details.categories;
+          store_price_krw = details.store_price_krw;
           if (details.game_name) resolvedName = details.game_name;
         } catch (e) {
           reasons.push(`appdetails: ${String(e)}`);
@@ -184,6 +189,7 @@ export async function POST(_req: NextRequest) {
           playtime_forever: game.playtime_forever,
           playtime_2weeks: game.playtime_2weeks,
           source: game.source,
+          store_price_krw,
         };
       } catch (fatal) {
         // 절대 null이 반환되지 않도록 최후 안전망
@@ -197,6 +203,7 @@ export async function POST(_req: NextRequest) {
           playtime_forever: game.playtime_forever,
           playtime_2weeks: game.playtime_2weeks,
           source: game.source,
+          store_price_krw: null,
         };
       }
     },
@@ -220,6 +227,7 @@ export async function POST(_req: NextRequest) {
       playtime_forever: src.playtime_forever,
       playtime_2weeks: src.playtime_2weeks,
       source: src.source,
+      store_price_krw: null,
     };
   });
 
@@ -235,6 +243,7 @@ export async function POST(_req: NextRequest) {
     playtime_forever: g.playtime_forever,
     playtime_2weeks: g.playtime_2weeks,
     source: g.source,
+    store_price_krw: g.store_price_krw,
   }));
 
   // 4. 메타데이터 포함 전체 upsert

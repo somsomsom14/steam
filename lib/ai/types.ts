@@ -12,6 +12,8 @@ export type UserGameRecord = {
   categories: unknown;
   tags: unknown;
   playtime_forever: number | string | null;
+  playtime_2weeks?: number | string | null;
+  store_price_krw?: number | null;
 };
 
 export type TagTendency = {
@@ -27,4 +29,11 @@ export type RoomForRecommend = {
   game_name: string;
   tags: string[];
   member_count: number;
+};
+
+/** appid는 Steam Store 검색으로 확보, 썸네일·상점 URL은 appid로 조합 */
+export type GameRecommendItem = {
+  appid: number;
+  name: string;
+  reason: string;
 };
