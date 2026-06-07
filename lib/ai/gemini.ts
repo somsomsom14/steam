@@ -1,15 +1,23 @@
 import { GoogleGenerativeAI, type Content, type GenerativeModel } from "@google/generative-ai";
 import type { ChatHistoryMessage } from "./types";
 
-/** 고정 모델 (2.5 계열 오류 회피) */
-const GEMINI_MODEL_ID = "gemini-1.5-flash";
+/** 1순위 gemini-2.5-flash → 실패 시 gemini-1.5-flash */
+const PRIMARY_MODEL = "gemini-2.5-flash";
+const FALLBACK_MODEL = "gemini-1.5-flash";
 const API_TIMEOUT_MS = 45_000;
 
 export function getGeminiModelChain(): string[] {
-  return [GEMINI_MODEL_ID];
+  return [PRIMARY_MODEL, FALLBACK_MODEL];
 }
 
-export const GEMINI_MODEL = GEMINI_MODEL_ID;
+export const GEMINI_MODEL = PRIMARY_MODEL;
+
+function logGeminiError(context: string, error: unknown, modelName?: string) {
+  console.error(`[gemini] ${context}`);
+  if (modelName) console.error("[gemini] model:", modelName);
+  console.error("Gemini full error:", error);
+  console.error("GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
+}
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -47,10 +55,6 @@ function isModelUnavailable(raw: string): boolean {
   return /404|not found|not supported|invalid model/i.test(raw);
 }
 
-function isRetryableModelError(raw: string): boolean {
-  return isQuotaError(raw) || isModelUnavailable(raw);
-}
-
 /** Google API 오류 → 사용자용 한국어 메시지 */
 export function toUserFacingGeminiError(err: unknown, model?: string): Error {
   const raw = err instanceof Error ? err.message : String(err);
@@ -76,7 +80,7 @@ export function toUserFacingGeminiError(err: unknown, model?: string): Error {
 
   if (isModelUnavailable(raw)) {
     return new Error(
-      `설정된 AI 모델(${GEMINI_MODEL_ID})을 사용할 수 없습니다.${modelNote}\n` +
+      `설정된 AI 모델(${PRIMARY_MODEL} / ${FALLBACK_MODEL})을 사용할 수 없습니다.${modelNote}\n` +
         `Google AI Studio에서 API 키와 모델 사용 가능 여부를 확인해 주세요.`
     );
   }
@@ -121,13 +125,21 @@ async function withModelFallback<T>(fn: (modelName: string) => Promise<T>): Prom
         "AI 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요."
       );
     } catch (err) {
+      logGeminiError("withModelFallback", err, modelName);
       const raw = err instanceof Error ? err.message : String(err);
       errors.push(`${modelName}: ${raw.slice(0, 120)}`);
-      if (!isRetryableModelError(raw) || i === models.length - 1) {
-        const combined = errors.join(" | ");
-        const preferQuota = errors.some((e) => isQuotaError(e));
-        throw new Error(preferQuota ? errors.find((e) => isQuotaError(e))! : combined);
+
+      const hasNext = i < models.length - 1;
+      if (hasNext) {
+        console.warn(`[gemini] ${modelName} failed, falling back to ${models[i + 1]}`);
+        continue;
       }
+
+      const combined = errors.join(" | ");
+      const preferQuota = errors.some((e) => isQuotaError(e));
+      const finalErr = new Error(preferQuota ? errors.find((e) => isQuotaError(e))! : combined);
+      logGeminiError("withModelFallback (final)", finalErr, modelName);
+      throw finalErr;
     }
   }
 
@@ -136,11 +148,16 @@ async function withModelFallback<T>(fn: (modelName: string) => Promise<T>): Prom
 
 /** 단발 생성 */
 export async function generateText(prompt: string, systemInstruction?: string): Promise<string> {
-  return withModelFallback(async (modelName) => {
-    const model = getModelFor(modelName, systemInstruction);
-    const result = await model.generateContent(prompt);
-    return result.response.text().trim();
-  });
+  try {
+    return await withModelFallback(async (modelName) => {
+      const model = getModelFor(modelName, systemInstruction);
+      const result = await model.generateContent(prompt);
+      return result.response.text().trim();
+    });
+  } catch (error) {
+    logGeminiError("generateText", error);
+    throw error;
+  }
 }
 
 /** 스트리밍 생성 — 대화 히스토리 포함 */
@@ -158,6 +175,7 @@ export async function* streamChatResponse(params: {
       return chat.sendMessageStream(params.userPrompt);
     });
   } catch (err) {
+    logGeminiError("streamChatResponse (request)", err);
     throw toUserFacingGeminiError(err, GEMINI_MODEL);
   }
 
@@ -167,6 +185,7 @@ export async function* streamChatResponse(params: {
       if (text) yield text;
     }
   } catch (err) {
+    logGeminiError("streamChatResponse (stream)", err);
     throw toUserFacingGeminiError(err, GEMINI_MODEL);
   }
 }
