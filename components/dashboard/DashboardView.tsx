@@ -27,6 +27,9 @@ import "./dashboard.css";
 const ANIMATION_MS = 1400;
 const RADAR_LABEL_OFFSET = 22;
 
+const STEAM_GAME_DETAILS_PUBLIC_HINT =
+  "Steam 프로필 → 프로필 편집 → 개인 정보 설정 → 게임 세부 정보: 공개\n\n공개로 변경한 뒤 Steam 다시 동기화를 진행해 주세요.";
+
 function RadarAxisTick(props: {
   x?: string | number;
   y?: string | number;
@@ -84,7 +87,7 @@ function getEmptyStateMessage(
   if (libraryCount === 0) {
     return {
       title: "Steam 라이브러리가 아직 동기화되지 않았습니다",
-      description: "",
+      description: STEAM_GAME_DETAILS_PUBLIC_HINT,
       action: { href: "/onboarding", label: "Steam 동기화 하기" },
     };
   }
@@ -92,7 +95,7 @@ function getEmptyStateMessage(
   if (zeroPlaytimeCount === libraryCount) {
     return {
       title: "보유 게임은 있지만 플레이 기록이 없습니다",
-      description: `라이브러리 ${libraryCount}개가 저장되어 있으나, 플레이 시간이 0분인 게임만 있습니다. Steam 프로필·게임 상세를 공개한 뒤 다시 동기화해 주세요.`,
+      description: `라이브러리 ${libraryCount}개가 저장되어 있으나, 플레이 시간이 0분인 게임만 있습니다.\n\n${STEAM_GAME_DETAILS_PUBLIC_HINT}`,
       action: { href: "/onboarding", label: "Steam 다시 동기화" },
     };
   }
