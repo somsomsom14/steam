@@ -1,13 +1,10 @@
 export function HeroContent() {
   return (
     <section className="pointer-events-none relative z-20 mx-auto flex w-full max-w-[1100px] -translate-y-20 flex-col items-center gap-7 px-6 text-center">
-      <span className="block font-mono text-[0.7rem] uppercase tracking-[0.2em] text-accent">
-        {"// CONNECTIVITY_MODULE_ACTIVE"}
-      </span>
       <h1 className="text-[clamp(2.8rem,7vw,5.4rem)] leading-[1.04] font-black tracking-[-0.045em] break-keep">
         나만 하는 줄 알았던 그 게임
       </h1>
-      <p className="mx-auto w-full max-w-[520px] text-center text-[1.15rem] leading-[1.6] text-text-dim break-keep max-[1024px]:text-[1.1rem]">
+      <p className="mx-auto w-full max-w-[520px] text-center text-[1.15rem] leading-[1.6] text-[#b8c2ce] break-keep max-[1024px]:text-[1.1rem]">
         MI-TEAM에선 어떤 스팀 게임이든 <br />
         같이 할 수 있는 팀이 생깁니다.
       </p>

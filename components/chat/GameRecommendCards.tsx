@@ -21,7 +21,7 @@ export function GameRecommendCards({ intro, games, onMoreRecs, disabled }: Props
           const store = steamStoreUrl(game.appid);
 
           return (
-            <article key={game.appid} className="ai-game-recs__card">
+            <article key={`${game.appid}-${game.name}`} className="ai-game-recs__card">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={thumb} alt="" className="ai-game-recs__thumb" loading="lazy" />
               <div className="ai-game-recs__body">

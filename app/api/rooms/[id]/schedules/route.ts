@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     .from("room_schedules")
     .select(SCHEDULE_SELECT)
     .eq("room_id", id)
-    .order("target_time", { ascending: true });
+    .order("target_time", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const withParticipants = await attachParticipants(supabase, data ?? []);

@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("room_messages")
-    .select(`id, room_id, user_id, message, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
+    .select(`id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
     .eq("room_id", id)
     .order("created_at", { ascending: true })
     .limit(100);
@@ -30,13 +30,30 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const { data: member } = await supabase.from("room_members").select("user_id").eq("room_id", id).eq("user_id", session.userId).maybeSingle();
   if (!member) return NextResponse.json({ error: "방 멤버가 아닙니다." }, { status: 403 });
 
-  const { message } = await req.json();
-  if (!message?.trim()) return NextResponse.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
+  const body = await req.json();
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  const messageType = body.message_type === "image" ? "image" : "text";
+  const attachmentUrl =
+    typeof body.attachment_url === "string" ? body.attachment_url.trim() : "";
+
+  if (messageType === "image") {
+    if (!attachmentUrl) {
+      return NextResponse.json({ error: "이미지 URL이 필요합니다." }, { status: 400 });
+    }
+  } else if (!message) {
+    return NextResponse.json({ error: "메시지를 입력해 주세요." }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("room_messages")
-    .insert({ room_id: id, user_id: session.userId, message: message.trim() })
-    .select(`id, room_id, user_id, message, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
+    .insert({
+      room_id: id,
+      user_id: session.userId,
+      message,
+      message_type: messageType,
+      attachment_url: messageType === "image" ? attachmentUrl : null,
+    })
+    .select(`id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

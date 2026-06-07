@@ -16,10 +16,9 @@ type Props = {
   games: Game[];
   displayName: string;
   avatarUrl: string;
-  steamId: string;
 };
 
-export function RoomNewClient({ games, displayName, avatarUrl, steamId }: Props) {
+export function RoomNewClient({ games, displayName, avatarUrl }: Props) {
   const router = useRouter();
   const [selectedAppid, setSelectedAppid] = useState<number | "">("");
   const [title, setTitle] = useState("");
@@ -91,7 +90,6 @@ export function RoomNewClient({ games, displayName, avatarUrl, steamId }: Props)
             <ProfileAvatar src={avatarUrl} alt="" className="dashboard-topbar__avatar" />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{displayName}</div>
-              <div className="dashboard-topbar__id">ID: <strong>{steamId.slice(-7)}</strong></div>
               <svg className="dashboard-topbar__chevron" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 10l5 5 5-5H7z" />
               </svg>

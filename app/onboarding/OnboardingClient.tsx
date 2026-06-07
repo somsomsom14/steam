@@ -30,6 +30,8 @@ export function OnboardingClient({ steamNickname, steamAvatarUrl }: Props) {
 
   // Step 1
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [syncPercent, setSyncPercent] = useState(0);
+  const [syncPhase, setSyncPhase] = useState("");
   const [syncCount, setSyncCount] = useState(0);
   const [syncTotal, setSyncTotal] = useState(0);
   const [syncMissing, setSyncMissing] = useState<{ appid: number; name: string }[]>([]);
@@ -47,25 +49,65 @@ export function OnboardingClient({ steamNickname, steamAvatarUrl }: Props) {
 
   const handleAgree = async () => {
     setSyncStatus("syncing");
+    setSyncPercent(0);
+    setSyncPhase("준비 중");
     await fetch("/api/user/agree", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agreed: true }),
     }).catch(() => {});
     try {
-      const res = await fetch("/api/steam/sync", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setSyncCount(data.saved ?? 0);
-        setSyncTotal(data.total ?? 0);
-        setSyncMissing(data.missing ?? []);
-        setSyncStatus("done");
-        if (!data.missing?.length) {
-          setTimeout(() => setStep(2), 2500);
-        }
-      } else {
+      const res = await fetch("/api/steam/sync/stream", { method: "POST" });
+      if (!res.ok || !res.body) {
         setSyncStatus("error");
+        return;
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completed = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = JSON.parse(line.slice(6)) as {
+            type: string;
+            percent?: number;
+            phase?: string;
+            saved?: number;
+            total?: number;
+            missing?: { appid: number; name: string }[];
+          };
+
+          if (payload.type === "progress") {
+            setSyncPercent(payload.percent ?? 0);
+            setSyncPhase(payload.phase ?? "");
+          } else if (payload.type === "complete") {
+            completed = true;
+            setSyncPercent(100);
+            setSyncPhase("동기화 완료");
+            setSyncCount(payload.saved ?? 0);
+            setSyncTotal(payload.total ?? 0);
+            setSyncMissing(payload.missing ?? []);
+            setSyncStatus("done");
+            if (!payload.missing?.length) {
+              setTimeout(() => setStep(2), 2500);
+            }
+          } else if (payload.type === "error") {
+            setSyncStatus("error");
+            return;
+          }
+        }
+      }
+
+      if (!completed) setSyncStatus("error");
     } catch {
       setSyncStatus("error");
     }
@@ -217,15 +259,33 @@ export function OnboardingClient({ steamNickname, steamAvatarUrl }: Props) {
                       border: `2px solid ${A10}`,
                       borderTopColor: A,
                       animation: "spin 0.8s linear infinite",
+                      flexShrink: 0,
                     }} />
-                    <div>
-                      <p style={{ fontSize: "0.9rem", color: "#e2e8f0", fontWeight: 500 }}>
-                        Steam 게임 데이터 동기화 중...
-                      </p>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                        <p style={{ fontSize: "0.9rem", color: "#e2e8f0", fontWeight: 500, margin: 0 }}>
+                          {syncPhase || "Steam 게임 데이터 동기화 중..."}
+                        </p>
+                        <span style={{
+                          fontFamily: "monospace", fontSize: "0.85rem", fontWeight: 700,
+                          color: A, flexShrink: 0,
+                        }}>
+                          {syncPercent}%
+                        </span>
+                      </div>
                       <p style={{ fontSize: "0.75rem", color: "#a0a8b8", marginTop: 3 }}>
                         보유 게임 수에 따라 최대 1분 소요됩니다.
                       </p>
                     </div>
+                  </div>
+                  <div style={{
+                    height: 4, borderRadius: 2, background: A10, overflow: "hidden",
+                  }}>
+                    <div style={{
+                      height: "100%", borderRadius: 2, background: A,
+                      width: `${syncPercent}%`,
+                      transition: "width 0.35s ease",
+                    }} />
                   </div>
                   <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 </div>

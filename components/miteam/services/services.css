@@ -70,8 +70,12 @@
 .services-section .service-card {
   position: relative;
   padding: 3rem;
+  min-height: 26rem;
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
   border-right: 1px solid var(--border-service);
   transition: background-color 0.3s ease;
 }
@@ -137,24 +141,40 @@
   border-width: 0 2px 2px 0;
 }
 
-.services-section .card-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border-service);
-  padding-bottom: 1rem;
-  margin-bottom: 2rem;
-  font-family: var(--font-space-mono-next), var(--font-space-mono), monospace;
-  font-size: 0.875rem;
+.services-section .card-top {
+  position: absolute;
+  top: 3rem;
+  left: 3rem;
+  right: 3rem;
 }
 
 .services-section .card-num {
   color: var(--text-main);
   font-weight: 700;
   font-size: 1.25rem;
+  font-family: var(--font-space-mono-next), var(--font-space-mono), monospace;
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
+}
+
+.services-section .card-top-line {
+  margin-top: 1rem;
+  border-bottom: 1px solid var(--border-service);
+}
+
+.services-section .card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.services-section .card-divider {
+  width: 100%;
+  margin-top: 2.5rem;
+  border-top: 1px dashed var(--border-service);
 }
 
 .services-section .card-num::after {
@@ -162,16 +182,6 @@
   color: var(--accent);
   font-size: 0.875rem;
   opacity: 0.5;
-}
-
-.services-section .card-label {
-  color: var(--accent);
-  background: rgba(45, 212, 191, 0.1);
-  padding: 0.25rem 0.5rem;
-  border-radius: 2px;
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 .services-section .card-title {
@@ -188,7 +198,9 @@
   font-size: 1rem;
   font-weight: 400;
   word-break: keep-all;
-  flex-grow: 1;
+  max-width: 22rem;
+  margin: 0 auto;
+  line-height: 1.65;
 }
 
 .services-section .card-footer {
@@ -272,6 +284,7 @@
   }
 
   .services-section .service-card {
+    min-height: 22rem;
     border-right: none;
     border-bottom: 1px solid var(--border-service);
   }

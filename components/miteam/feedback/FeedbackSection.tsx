@@ -1,5 +1,5 @@
 import { FeedbackCard } from "./FeedbackCard";
-import { feedbackItems, feedbackMeta, systemLogLines } from "./data";
+import { feedbackItems } from "./data";
 import { TechOrnament } from "./TechOrnament";
 import "./feedback.css";
 
@@ -8,24 +8,19 @@ export function FeedbackSection() {
     <section className="feedback-section" aria-labelledby="feedback-title">
       <div className="feedback-container">
         <section className="display-section">
-          <div className="top-meta">
-            {feedbackMeta.map((label, index) => (
-              <span key={label} className={index === feedbackMeta.length - 1 ? "active" : undefined}>
-                {label}
-              </span>
-            ))}
-          </div>
-
           <div className="title-group">
+            <div className="title-eyebrow" aria-hidden>
+              <span className="title-eyebrow__dot" />
+              <span className="title-eyebrow__line" />
+            </div>
             <h2 id="feedback-title">
-              USER_<span>FEEDBACK</span>
+              PLAYER_
+              <span>
+                REVIEWS
+                <span className="title-cursor" aria-hidden />
+              </span>
             </h2>
             <div className="sys-log-divider" />
-            <div className="system-log-stream">
-              {systemLogLines.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-            </div>
           </div>
 
           <TechOrnament />

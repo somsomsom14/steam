@@ -10,7 +10,6 @@ import "@/components/dashboard/dashboard.css";
 type Gender = "male" | "female" | "private";
 
 type Props = {
-  steamId: string;
   steamNickname: string;
   steamAvatarUrl: string;
   appNickname: string;
@@ -41,7 +40,6 @@ function formatDate(iso: string | null) {
 }
 
 export function ProfileClient({
-  steamId,
   steamNickname,
   steamAvatarUrl,
   appNickname,
@@ -244,9 +242,6 @@ export function ProfileClient({
             <ProfileAvatar src={topbarAvatar} alt="" className="dashboard-topbar__avatar" />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{displayName}</div>
-              <div className="dashboard-topbar__id">
-                ID: <strong>{steamId.slice(-7)}</strong>
-              </div>
               <svg
                 className="dashboard-topbar__chevron"
                 width="16"
@@ -280,17 +275,18 @@ export function ProfileClient({
               <strong style={{ color: "#e2e8f0", fontWeight: 600 }}>{displayName}</strong>
               님의 닉네임과 프로필을 관리합니다.
             </p>
-            <p
-              style={{
-                marginTop: 8,
-                fontSize: "0.72rem",
-                color: "rgba(160,168,184,0.45)",
-                fontFamily: "monospace",
-              }}
-            >
-              STEAM · {steamId}
-              {lastUpdated && ` · 갱신 ${formatDate(lastUpdated)}`}
-            </p>
+            {lastUpdated && (
+              <p
+                style={{
+                  marginTop: 8,
+                  fontSize: "0.72rem",
+                  color: "rgba(160,168,184,0.45)",
+                  fontFamily: "monospace",
+                }}
+              >
+                게임 데이터 갱신 {formatDate(lastUpdated)}
+              </p>
+            )}
           </div>
 
           {/* 프로필 편집 */}

@@ -23,7 +23,6 @@ export default async function ProfilePage() {
 
   return (
     <ProfileClient
-      steamId={session.steamId}
       steamNickname={user?.steam_nickname ?? ""}
       steamAvatarUrl={user?.steam_avatar_url ?? ""}
       appNickname={user?.app_nickname ?? ""}

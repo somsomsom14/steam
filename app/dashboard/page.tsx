@@ -69,7 +69,6 @@ export default async function DashboardPage() {
     <DashboardView
       displayName={displayName}
       avatarUrl={avatarUrl}
-      steamId={session.steamId}
       analysis={analysis}
       fetchError={fetchError}
     />

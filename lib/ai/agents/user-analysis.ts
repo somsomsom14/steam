@@ -6,6 +6,16 @@ import {
 import { streamChatResponse } from "../gemini";
 import type { ChatHistoryMessage, UserGameRecord } from "../types";
 
+export const ANALYSIS_QA_SYSTEM = `너는 MI-TEAM Steam 데이터 Q&A Agent입니다.
+입력 JSON은 사용자 DB(대시보드와 동일)입니다.
+
+규칙:
+- 마크다운 금지, 해요체, 1~2문장 이모지
+- 반드시 JSON 데이터만 근거로 답하세요. 추측 금지.
+- 사용자 질문에 직접 답하세요. 보고서 형식·섹션 제목 금지.
+- 데이터에 없으면 "해당 정보는 데이터에 없어요"라고 말하세요.
+- top_played_games의 rank는 플레이 시간 순위(1=최다)입니다.`;
+
 export const ANALYSIS_SYSTEM = `
 너는 MI-TEAM의 Steam 상세 분석 Agent입니다.
 스팀 라이브러리와 유저 플레이 데이터를 분석하여 게임 성향 보고서를 작성합니다.
@@ -21,7 +31,7 @@ export const ANALYSIS_SYSTEM = `
   "multi_play_ratio": "멀티 비율%",
   "single_play_ratio": "싱글 비율%",
   "recent_2weeks_games": ["게임1", "게임2"],
-  "top_played_games": [{"name": "게임명", "hours": "시간"}],
+  "top_played_games": [{"rank": 1, "name": "게임명", "hours": "시간"}],
   "most_played_game": {"name": "게임명", "hours": "시간"},
   "least_played_game": {"name": "게임명", "hours": "시간"},
   "play_style_headline": "대시보드 플레이스타일 한 줄 요약"
@@ -33,7 +43,9 @@ export const ANALYSIS_SYSTEM = `
 - 친절하게 작성
 - 이모지는 자연스럽게 1~2개만 사용
 - 실제 데이터에 근거하여 설명
-- 아래 순서대로 작성
+- top_played_games의 rank는 플레이 시간 순위(1위=가장 많이 플레이)입니다.
+- 사용자가 N번째 게임·순위·플레이 시간 등 특정 질문만 한 경우: 아래 보고서 형식을 쓰지 말고 질문에만 간단히 답하세요. 해당 rank가 top_played_games에 없으면 솔직히 알려주세요.
+- 전체 성향 분석을 요청한 경우에만 아래 순서대로 작성
 
 1. 5줄 요약으로 보는 나의 플레이 스타일
 
@@ -80,6 +92,7 @@ export async function* runUserAnalysisAgent(params: {
   games: UserGameRecord[];
   displayName: string;
   history: ChatHistoryMessage[];
+  fullReport: boolean;
 }): AsyncGenerator<string> {
   if (needsSteamSyncForAnalysis(params.games)) {
     yield STEAM_SYNC_REQUIRED_MESSAGE;
@@ -88,15 +101,22 @@ export async function* runUserAnalysisAgent(params: {
 
   const input = buildAnalysisAgentInput(params.games, params.displayName);
 
-  const prompt = `아래 JSON은 대시보드 그래프·라이브러리 가격과 동일한 분석 데이터입니다. 보고서를 작성하세요.
+  const prompt = params.fullReport
+    ? `아래 JSON은 대시보드 그래프·라이브러리 가격과 동일한 분석 데이터입니다. 보고서를 작성하세요.
 
 ${JSON.stringify(input, null, 2)}
 
 [사용자 요청]
+${params.userMessage}`
+    : `아래 JSON만 사용해 사용자 질문에 답하세요.
+
+${JSON.stringify(input, null, 2)}
+
+[사용자 질문]
 ${params.userMessage}`;
 
   yield* streamChatResponse({
-    systemInstruction: ANALYSIS_SYSTEM,
+    systemInstruction: params.fullReport ? ANALYSIS_SYSTEM : ANALYSIS_QA_SYSTEM,
     userPrompt: prompt,
     history: params.history,
   });

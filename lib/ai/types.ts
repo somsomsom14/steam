@@ -27,8 +27,20 @@ export type RoomForRecommend = {
   title: string;
   subtitle: string | null;
   game_name: string;
+  game_appid: number;
   tags: string[];
   member_count: number;
+};
+
+export type RoomRecommendItem = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  game_name: string;
+  game_appid: number;
+  member_count: number;
+  tags: string[];
+  reason: string;
 };
 
 /** appid는 Steam Store 검색으로 확보, 썸네일·상점 URL은 appid로 조합 */

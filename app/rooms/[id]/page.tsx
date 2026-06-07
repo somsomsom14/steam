@@ -46,16 +46,11 @@ export default async function RoomPage({ params }: Params) {
 
   const { data: owned } = await supabase.from("user_games").select("appid").eq("user_id", session.userId).eq("appid", room.game_appid).maybeSingle();
   if (!owned) {
-    return (
-      <div className="chat-denied">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3 }}>
-          <rect x="3" y="5" width="18" height="12" rx="2" /><path d="M8 21h8M12 17v4" />
-        </svg>
-        <h2>이 게임을 보유하고 있지 않습니다.</h2>
-        <p style={{ fontSize: "0.85rem" }}>이 방은 <strong>{room.game_name}</strong> 보유자만 입장할 수 있습니다.</p>
-        <Link href="/rooms">방 목록으로 돌아가기</Link>
-      </div>
-    );
+    const q = new URLSearchParams({
+      blockedAppid: String(room.game_appid),
+      blockedGame: room.game_name,
+    });
+    redirect(`/rooms?${q.toString()}`);
   }
 
   // Auto-join if not yet a member
@@ -64,8 +59,8 @@ export default async function RoomPage({ params }: Params) {
   const [{ data: currentUser }, { data: members }, { data: initialMessages }, { data: schedulesRaw }] = await Promise.all([
     supabase.from("users").select("id, app_nickname, steam_nickname, app_avatar_url, steam_avatar_url").eq("id", session.userId).single(),
     supabase.from("room_members").select(`role, joined_at, user:users!user_id(id, app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`).eq("room_id", id),
-    supabase.from("room_messages").select(`id, room_id, user_id, message, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`).eq("room_id", id).order("created_at", { ascending: true }).limit(100),
-    supabase.from("room_schedules").select(`id, room_id, creator_id, content, target_time, created_at, creator:users!creator_id(app_nickname, steam_nickname)`).eq("room_id", id).order("target_time", { ascending: true }),
+    supabase.from("room_messages").select(`id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`).eq("room_id", id).order("created_at", { ascending: true }).limit(100),
+    supabase.from("room_schedules").select(`id, room_id, creator_id, content, target_time, created_at, creator:users!creator_id(app_nickname, steam_nickname)`).eq("room_id", id).order("target_time", { ascending: false }),
   ]);
 
   const schedules = schedulesRaw ?? [];

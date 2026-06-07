@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { GameNotOwnedModal } from "@/components/rooms/GameNotOwnedModal";
+import { RoomConfirmModal } from "@/components/rooms/RoomConfirmModal";
 import { RoomsHeroGridScene } from "@/components/rooms/RoomsHeroGridScene";
 import "@/components/dashboard/dashboard.css";
 import "./rooms.css";
@@ -22,7 +25,19 @@ type RoomRow = {
   room_members: { count: number }[];
 };
 
-function RoomCard({ room }: { room: RoomRow }) {
+type BlockedGame = { gameName: string; gameAppid: number };
+
+function RoomCard({
+  room,
+  ownedAppIds,
+  onBlocked,
+  onSelect,
+}: {
+  room: RoomRow;
+  ownedAppIds: Set<number>;
+  onBlocked: (game: BlockedGame) => void;
+  onSelect: (room: RoomRow) => void;
+}) {
   const thumb = room.game_thumbnail || `https://cdn.akamai.steamstatic.com/steam/apps/${room.game_appid}/header.jpg`;
   const hostName = room.host?.app_nickname || room.host?.steam_nickname || "알 수 없음";
   const hostAvatar = room.host?.app_avatar_url || room.host?.steam_avatar_url || "";
@@ -30,7 +45,18 @@ function RoomCard({ room }: { room: RoomRow }) {
   const tags: string[] = Array.isArray(room.tags) ? room.tags : [];
 
   return (
-    <Link href={`/rooms/${room.id}`} className="room-card">
+    <button
+      type="button"
+      className="room-card"
+      onClick={() => {
+        const appid = Number(room.game_appid);
+        if (!ownedAppIds.has(appid)) {
+          onBlocked({ gameName: room.game_name, gameAppid: appid });
+          return;
+        }
+        onSelect(room);
+      }}
+    >
       <div className="room-card__thumb">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={thumb} alt={room.game_name} />
@@ -61,7 +87,7 @@ function RoomCard({ room }: { room: RoomRow }) {
           </div>
         )}
       </div>
-    </Link>
+    </button>
   );
 }
 
@@ -69,19 +95,39 @@ type Props = {
   initialRooms: RoomRow[];
   displayName: string;
   avatarUrl: string;
-  steamId: string;
+  ownedAppIds: number[];
+  initialBlocked?: BlockedGame | null;
+  mode?: "all" | "mine";
 };
 
-export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: Props) {
+export function RoomsClient({
+  initialRooms,
+  displayName,
+  avatarUrl,
+  ownedAppIds,
+  initialBlocked = null,
+  mode = "all",
+}: Props) {
+  const router = useRouter();
   const [rooms, setRooms] = useState<RoomRow[]>(initialRooms);
   const [titleQuery, setTitleQuery] = useState("");
   const [gameQuery, setGameQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [blockedGame, setBlockedGame] = useState<BlockedGame | null>(initialBlocked);
+  const [joinTarget, setJoinTarget] = useState<RoomRow | null>(null);
+  const ownedSet = useMemo(() => new Set(ownedAppIds.map((id) => Number(id))), [ownedAppIds]);
+
+  useEffect(() => {
+    if (!initialBlocked) return;
+    const path = mode === "mine" ? "/rooms/mine" : "/rooms";
+    window.history.replaceState(null, "", path);
+  }, [initialBlocked, mode]);
 
   const fetchRooms = useCallback(async (title: string, game: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      if (mode === "mine") params.set("mine", "1");
       if (title.trim()) params.set("title", title.trim());
       if (game.trim()) params.set("game", game.trim());
       const qs = params.toString();
@@ -90,7 +136,7 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mode]);
 
   const runSearch = useCallback(() => {
     void fetchRooms(titleQuery, gameQuery);
@@ -104,7 +150,7 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
 
   return (
     <div className="dashboard-shell">
-      <DashboardSidebar activePath="/rooms" />
+      <DashboardSidebar activePath={mode === "mine" ? "/rooms/mine" : "/rooms"} />
 
       <div className="dashboard-right">
         {/* Topbar */}
@@ -115,7 +161,6 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
             <ProfileAvatar src={avatarUrl} alt="" className="dashboard-topbar__avatar" />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{displayName}</div>
-              <div className="dashboard-topbar__id">ID: <strong>{steamId.slice(-7)}</strong></div>
               <svg className="dashboard-topbar__chevron" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 10l5 5 5-5H7z" />
               </svg>
@@ -124,24 +169,29 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
         </header>
 
         {/* Content */}
-        <div className="dashboard-dark rooms-page" style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-          <header className="rooms-hero">
-            <RoomsHeroGridScene />
-            <div className="rooms-hero__inner">
-              <div className="rooms-hero__center">
-                <div className="rooms-hero__tagline">
-                  <p>게임을 선택하고,</p>
-                  <p>함께할 팀원을 만나보세요</p>
+        <div
+          className={`dashboard-dark rooms-page${mode === "mine" ? " rooms-page--mine" : ""}`}
+          style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}
+        >
+          {mode !== "mine" && (
+            <header className="rooms-hero">
+              <RoomsHeroGridScene />
+              <div className="rooms-hero__inner">
+                <div className="rooms-hero__center">
+                  <div className="rooms-hero__tagline">
+                    <p>게임을 선택하고,</p>
+                    <p>함께할 팀원을 만나보세요</p>
+                  </div>
+                  <Link href="/rooms/new" className="rooms-create-btn rooms-create-btn--hero">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    방 만들기
+                  </Link>
                 </div>
-                <Link href="/rooms/new" className="rooms-create-btn rooms-create-btn--hero">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  방 만들기
-                </Link>
               </div>
-            </div>
-          </header>
+            </header>
+          )}
 
           <div className="rooms-search-bar">
             <div className="rooms-search-bar__filters">
@@ -202,20 +252,57 @@ export function RoomsClient({ initialRooms, displayName, avatarUrl, steamId }: P
                 <rect x="3" y="5" width="18" height="12" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
-              <p>방이 없습니다.</p>
+              <p>{mode === "mine" ? "참여 중인 방이 없습니다." : "방이 없습니다."}</p>
               <p className="rooms-empty__sub">
-                <Link href="/rooms/new">첫 번째로 만들어보세요!</Link>
+                {mode === "mine" ? (
+                  <Link href="/rooms">방 찾기에서 참여해 보세요</Link>
+                ) : (
+                  <Link href="/rooms/new">첫 번째로 만들어보세요!</Link>
+                )}
               </p>
             </div>
           )}
 
           {!loading && rooms.length > 0 && (
             <div className="rooms-grid">
-              {rooms.map((room) => <RoomCard key={room.id} room={room} />)}
+              {rooms.map((room) => (
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  ownedAppIds={ownedSet}
+                  onBlocked={setBlockedGame}
+                  onSelect={(selected) => {
+                    if (mode === "mine") {
+                      router.push(`/rooms/${selected.id}`);
+                      return;
+                    }
+                    setJoinTarget(selected);
+                  }}
+                />
+              ))}
             </div>
           )}
         </div>
       </div>
+
+      {joinTarget && (
+        <RoomConfirmModal
+          title="참여하시겠습니까?"
+          description={`${joinTarget.title} · ${joinTarget.game_name}`}
+          confirmLabel="참여하기"
+          variant="default"
+          onConfirm={() => router.push(`/rooms/${joinTarget.id}`)}
+          onCancel={() => setJoinTarget(null)}
+        />
+      )}
+
+      {blockedGame && (
+        <GameNotOwnedModal
+          gameName={blockedGame.gameName}
+          gameAppid={blockedGame.gameAppid}
+          onConfirm={() => setBlockedGame(null)}
+        />
+      )}
     </div>
   );
 }

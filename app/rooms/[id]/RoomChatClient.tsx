@@ -6,6 +6,8 @@ import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { RoomChatEmojiPicker } from "@/components/rooms/RoomChatEmojiPicker";
+import { RoomConfirmModal } from "@/components/rooms/RoomConfirmModal";
 import "@/components/dashboard/dashboard.css";
 import "../rooms.css";
 
@@ -17,11 +19,15 @@ type UserSnippet = {
   steam_avatar_url: string | null;
 };
 
+type MessageType = "text" | "image";
+
 type Message = {
   id: string;
   room_id: string;
   user_id: string;
   message: string;
+  message_type?: MessageType | null;
+  attachment_url?: string | null;
   created_at: string;
   user: UserSnippet | null;
 };
@@ -71,9 +77,15 @@ type Props = {
   initialSchedules: Schedule[];
 };
 
+const SCHEDULES_PER_PAGE = 3;
+
 /* ---- Helpers ---- */
 function nickOf(u: UserSnippet | null) {
   return u?.app_nickname || u?.steam_nickname || "알 수 없음";
+}
+
+function participantNick(p: ScheduleParticipant) {
+  return p.user?.app_nickname || p.user?.steam_nickname || "알 수 없음";
 }
 function avatarOf(u: UserSnippet | null) {
   return u?.app_avatar_url || u?.steam_avatar_url || "";
@@ -83,6 +95,28 @@ function fmtTime(iso: string) {
 }
 function fmtScheduleTime(iso: string) {
   return new Date(iso).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function isSchedulePast(targetTime: string, nowMs: number) {
+  return new Date(targetTime).getTime() < nowMs;
+}
+
+function normalizeMessage(m: Message): Message {
+  return {
+    ...m,
+    message_type: m.message_type === "image" ? "image" : "text",
+    attachment_url: m.attachment_url ?? null,
+  };
+}
+
+function isImageMessage(msg: Message) {
+  return msg.message_type === "image" && !!msg.attachment_url;
+}
+
+function sortSchedulesDesc(list: Schedule[]) {
+  return [...list].sort(
+    (a, b) => new Date(b.target_time).getTime() - new Date(a.target_time).getTime()
+  );
 }
 
 function Avatar({ src, size = 36 }: { src: string; size?: number }) {
@@ -101,12 +135,15 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
 
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [members, setMembers] = useState<MemberRow[]>(initialMembers);
-  const [schedules, setSchedules] = useState<Schedule[]>(initialSchedules);
+  const [schedules, setSchedules] = useState<Schedule[]>(() => sortSchedulesDesc(initialSchedules));
   const [notice, setNotice] = useState(room.notice ?? "");
   const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set());
 
   const [chatInput, setChatInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const [editingNotice, setEditingNotice] = useState(false);
   const [noticeInput, setNoticeInput] = useState(room.notice ?? "");
@@ -118,11 +155,36 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
   const [scheduleTimeOnly, setScheduleTimeOnly] = useState("");
   const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [participateLoading, setParticipateLoading] = useState<string | null>(null);
+  const [expandedParticipantIds, setExpandedParticipantIds] = useState<Set<string>>(new Set());
+  const [schedulePage, setSchedulePage] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(schedules.length / SCHEDULES_PER_PAGE) - 1);
+    setSchedulePage((p) => (p > maxPage ? maxPage : p));
+  }, [schedules.length]);
+
+  const schedulePageCount = Math.max(1, Math.ceil(schedules.length / SCHEDULES_PER_PAGE));
+  const pagedSchedules = schedules.slice(
+    schedulePage * SCHEDULES_PER_PAGE,
+    schedulePage * SCHEDULES_PER_PAGE + SCHEDULES_PER_PAGE
+  );
+  const showSchedulePager = schedules.length > SCHEDULES_PER_PAGE;
 
   const [roomTitle, setRoomTitle] = useState(room.title);
   const [roomSubtitle, setRoomSubtitle] = useState(room.subtitle ?? "");
   const [roomTags, setRoomTags] = useState<string[]>(Array.isArray(room.tags) ? room.tags : []);
   const [showHostSettings, setShowHostSettings] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<
+    { type: "leave" } | { type: "kick"; userId: string } | { type: "delete" } | null
+  >(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -145,8 +207,10 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
     const channel = supabase.channel(`room:${room.id}`, { config: { presence: { key: currentUserId } } });
 
     channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "room_messages", filter: `room_id=eq.${room.id}` }, (payload) => {
-      const m = payload.new as Message;
-      setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, { ...m, user: userMap.current.get(m.user_id) ?? null }]);
+      const m = normalizeMessage(payload.new as Message);
+      setMessages((prev) =>
+        prev.some((x) => x.id === m.id) ? prev : [...prev, { ...m, user: userMap.current.get(m.user_id) ?? null }]
+      );
     });
 
     channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${room.id}` }, (payload) => {
@@ -179,15 +243,83 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
   }, [room.id, currentUserId, currentUser, supabase, router]);
 
   /* ---- Actions ---- */
+  async function postMessage(payload: { message: string; message_type?: MessageType; attachment_url?: string }) {
+    const res = await fetch(`/api/rooms/${room.id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(data.error ?? "메시지 전송에 실패했습니다.");
+    }
+  }
+
   async function sendMessage() {
     const text = chatInput.trim();
-    if (!text || sending) return;
+    if (!text || sending || uploadingImage) return;
     setSending(true);
     setChatInput("");
     if (textareaRef.current) textareaRef.current.style.height = "24px";
     try {
-      await fetch(`/api/rooms/${room.id}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
-    } finally { setSending(false); }
+      await postMessage({ message: text, message_type: "text" });
+    } catch (err) {
+      setChatInput(text);
+      alert(err instanceof Error ? err.message : "메시지 전송에 실패했습니다.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function insertEmoji(emoji: string) {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setChatInput((prev) => prev + emoji);
+      return;
+    }
+    const start = ta.selectionStart ?? chatInput.length;
+    const end = ta.selectionEnd ?? chatInput.length;
+    const next = chatInput.slice(0, start) + emoji + chatInput.slice(end);
+    setChatInput(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + emoji.length;
+      ta.selectionStart = pos;
+      ta.selectionEnd = pos;
+    });
+  }
+
+  async function handleImageUpload(file: File) {
+    if (uploadingImage || sending) return;
+    setUploadingImage(true);
+    const caption = chatInput.trim();
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const upRes = await fetch(`/api/rooms/${room.id}/messages/upload`, { method: "POST", body: formData });
+      if (!upRes.ok) {
+        const data = (await upRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "이미지 업로드에 실패했습니다.");
+      }
+      const { url } = (await upRes.json()) as { url: string };
+      await postMessage({
+        message: caption,
+        message_type: "image",
+        attachment_url: url,
+      });
+      setChatInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "24px";
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "이미지 전송에 실패했습니다.");
+    } finally {
+      setUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void handleImageUpload(file);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -208,21 +340,38 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
   }
 
   async function kickMember(userId: string) {
-    if (!confirm("이 멤버를 추방하시겠습니까?")) return;
     await fetch(`/api/rooms/${room.id}/members/${userId}`, { method: "DELETE" });
     setMembers((prev) => prev.filter((m) => m.user?.id !== userId));
   }
 
   async function leaveRoom() {
-    if (!confirm("방을 나가시겠습니까?")) return;
     await fetch(`/api/rooms/${room.id}/leave`, { method: "DELETE" });
     router.push("/rooms");
   }
 
   async function deleteRoom() {
-    if (!confirm("방을 삭제하시겠습니까? 모든 데이터가 삭제됩니다.")) return;
     await fetch(`/api/rooms/${room.id}`, { method: "DELETE" });
     router.push("/rooms");
+  }
+
+  async function handleConfirmAction() {
+    if (!confirmDialog || confirmLoading) return;
+    setConfirmLoading(true);
+    try {
+      if (confirmDialog.type === "leave") {
+        await leaveRoom();
+      } else if (confirmDialog.type === "kick") {
+        await kickMember(confirmDialog.userId);
+        setConfirmDialog(null);
+      } else if (confirmDialog.type === "delete") {
+        setShowHostSettings(false);
+        await deleteRoom();
+      }
+    } catch {
+      setConfirmDialog(null);
+    } finally {
+      setConfirmLoading(false);
+    }
   }
 
   async function saveRoomSettings() {
@@ -289,9 +438,13 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
         if (res.ok) {
           const updated = (await res.json()) as Schedule;
           setSchedules((prev) =>
-            prev
-              .map((s) => (s.id === updated.id ? { ...updated, participants: s.participants ?? updated.participants ?? [] } : s))
-              .sort((a, b) => new Date(a.target_time).getTime() - new Date(b.target_time).getTime())
+            sortSchedulesDesc(
+              prev.map((s) =>
+                s.id === updated.id ?
+                  { ...updated, participants: s.participants ?? updated.participants ?? [] }
+                : s
+              )
+            )
           );
           closeScheduleModal();
         }
@@ -304,9 +457,7 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
         if (res.ok) {
           const created = (await res.json()) as Schedule;
           setSchedules((prev) =>
-            [...prev, { ...created, participants: created.participants ?? [] }].sort(
-              (a, b) => new Date(a.target_time).getTime() - new Date(b.target_time).getTime()
-            )
+            sortSchedulesDesc([...prev, { ...created, participants: created.participants ?? [] }])
           );
           closeScheduleModal();
         }
@@ -348,6 +499,20 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
   async function deleteSchedule(scheduleId: string) {
     await fetch(`/api/rooms/${room.id}/schedules`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduleId }) });
     setSchedules((prev) => prev.filter((s) => s.id !== scheduleId));
+    setExpandedParticipantIds((prev) => {
+      const next = new Set(prev);
+      next.delete(scheduleId);
+      return next;
+    });
+  }
+
+  function toggleParticipantList(scheduleId: string) {
+    setExpandedParticipantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(scheduleId)) next.delete(scheduleId);
+      else next.add(scheduleId);
+      return next;
+    });
   }
 
 
@@ -373,7 +538,6 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
             <ProfileAvatar src={currentUser.avatar} alt="" className="dashboard-topbar__avatar" />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{currentUser.nickname}</div>
-              <div className="dashboard-topbar__id">ID: <strong>{currentUser.id.slice(-7)}</strong></div>
               <svg className="dashboard-topbar__chevron" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z" /></svg>
             </div>
           </a>
@@ -408,7 +572,7 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
                     </svg>
                   )}
                   {isHost && uid && uid !== currentUserId && (
-                    <button type="button" className="chat-sidebar__kick-btn" onClick={() => kickMember(uid)} title="추방">
+                    <button type="button" className="chat-sidebar__kick-btn" onClick={() => setConfirmDialog({ type: "kick", userId: uid })} title="추방">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                     </button>
                   )}
@@ -419,7 +583,7 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
 
             <div className="chat-sidebar__footer">
               {!isHost && (
-                <button type="button" className="chat-sidebar__leave-btn" onClick={leaveRoom}>
+                <button type="button" className="chat-sidebar__leave-btn" onClick={() => setConfirmDialog({ type: "leave" })}>
                   방 나가기
                 </button>
               )}
@@ -483,7 +647,24 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
                         <span className={`chat-msg__name${hostMsg ? " is-host" : ""}`}>{name}{hostMsg && " 👑"}</span>
                         <span className="chat-msg__time">{fmtTime(msg.created_at)}</span>
                       </div>
-                      <p className="chat-msg__text">{msg.message}</p>
+                      {isImageMessage(msg) ? (
+                        <div className="chat-msg__media">
+                          <a
+                            href={msg.attachment_url!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="chat-msg__image-link"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={msg.attachment_url!} alt="" className="chat-msg__image" loading="lazy" />
+                          </a>
+                          {msg.message.trim() && (
+                            <p className="chat-msg__text chat-msg__text--caption">{msg.message}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="chat-msg__text">{msg.message}</p>
+                      )}
                     </div>
                   </div>
                 );
@@ -493,19 +674,72 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
 
             {/* Input */}
             <div className="chat-input-bar">
-              <div className="chat-input-wrap">
-                <textarea
-                  ref={textareaRef}
-                  className="chat-input"
-                  placeholder={`#${room.game_name} 채팅...`}
-                  value={chatInput}
-                  onChange={handleInput}
-                  onKeyDown={handleKeyDown}
-                  rows={1}
-                />
-                <button type="button" className="chat-send-btn" onClick={sendMessage} disabled={!chatInput.trim() || sending}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" /></svg>
-                </button>
+              <div className="chat-input-toolbar">
+                <div className="chat-input-tools">
+                  <button
+                    type="button"
+                    className="chat-input-tool-btn"
+                    aria-label="이모지"
+                    onClick={() => setEmojiOpen((v) => !v)}
+                    disabled={sending || uploadingImage}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                      <line x1="9" y1="9" x2="9.01" y2="9" />
+                      <line x1="15" y1="9" x2="15.01" y2="9" />
+                    </svg>
+                  </button>
+                  <RoomChatEmojiPicker
+                    open={emojiOpen}
+                    onClose={() => setEmojiOpen(false)}
+                    onPick={insertEmoji}
+                  />
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="chat-input-file"
+                    onChange={handleImagePick}
+                  />
+                  <button
+                    type="button"
+                    className="chat-input-tool-btn"
+                    aria-label="사진 보내기"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={sending || uploadingImage}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="chat-input-wrap">
+                  <textarea
+                    ref={textareaRef}
+                    className="chat-input"
+                    placeholder={
+                      uploadingImage ? "이미지 업로드 중..." : `#${room.game_name} 채팅...`
+                    }
+                    value={chatInput}
+                    onChange={handleInput}
+                    onKeyDown={handleKeyDown}
+                    rows={1}
+                    disabled={uploadingImage}
+                  />
+                  <button
+                    type="button"
+                    className="chat-send-btn"
+                    onClick={sendMessage}
+                    disabled={!chatInput.trim() || sending || uploadingImage}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -519,18 +753,20 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
                 추가
               </button>
             </div>
+            <div className="chat-schedules-body">
             <div className="chat-schedules-list">
               {schedules.length === 0 && (
-                <p style={{ fontSize: "0.8rem", color: "var(--text-dim)", textAlign: "center", paddingTop: "1rem" }}>예정된 일정이 없습니다.</p>
+                <p style={{ fontSize: "0.9rem", color: "#5c6b7d", textAlign: "center", paddingTop: "1rem" }}>예정된 일정이 없습니다.</p>
               )}
-              {schedules.map((s) => {
+              {pagedSchedules.map((s) => {
                 const canDelete = isHost || s.creator_id === currentUserId;
                 const canEdit = s.creator_id === currentUserId;
                 const creatorName = s.creator?.app_nickname || s.creator?.steam_nickname || "알 수 없음";
                 const participants = s.participants ?? [];
                 const isJoined = participants.some((p) => p.user_id === currentUserId);
+                const isPast = isSchedulePast(s.target_time, nowMs);
                 return (
-                  <div key={s.id} className="chat-schedule-card">
+                  <div key={s.id} className={`chat-schedule-card${isPast ? " is-past" : ""}`}>
                     {(canEdit || canDelete) && (
                       <div className="chat-schedule-card__actions">
                         {canEdit && (
@@ -563,9 +799,59 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
                         </button>
                       </div>
                     </div>
+                    {participants.length > 0 && (
+                      <div className="chat-schedule-card__members-block">
+                        <button
+                          type="button"
+                          className="chat-schedule-card__members-toggle"
+                          onClick={() => toggleParticipantList(s.id)}
+                          aria-expanded={expandedParticipantIds.has(s.id)}
+                        >
+                          멤버 보기
+                          <span className="chat-schedule-card__members-chevron" aria-hidden>
+                            {expandedParticipantIds.has(s.id) ? "▲" : "▼"}
+                          </span>
+                        </button>
+                        {expandedParticipantIds.has(s.id) && (
+                          <ul className="chat-schedule-card__members">
+                            {participants.map((p) => (
+                              <li key={p.user_id} className="chat-schedule-card__member">
+                                {participantNick(p)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
+            </div>
+            {showSchedulePager && (
+              <div className="chat-schedules-pager">
+                <button
+                  type="button"
+                  className="chat-schedules-pager__btn"
+                  onClick={() => setSchedulePage((p) => Math.max(0, p - 1))}
+                  disabled={schedulePage === 0}
+                  aria-label="이전 일정"
+                >
+                  &lt;
+                </button>
+                <span className="chat-schedules-pager__info">
+                  {schedulePage + 1} / {schedulePageCount}
+                </span>
+                <button
+                  type="button"
+                  className="chat-schedules-pager__btn"
+                  onClick={() => setSchedulePage((p) => Math.min(schedulePageCount - 1, p + 1))}
+                  disabled={schedulePage >= schedulePageCount - 1}
+                  aria-label="다음 일정"
+                >
+                  &gt;
+                </button>
+              </div>
+            )}
             </div>
           </div>
         </div>
@@ -622,6 +908,38 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
         </div>
       )}
 
+      {confirmDialog && (
+        <RoomConfirmModal
+          title={
+            confirmDialog.type === "leave"
+              ? "방을 나가시겠습니까?"
+              : confirmDialog.type === "kick"
+                ? "이 멤버를 추방하시겠습니까?"
+                : "방을 삭제하시겠습니까?"
+          }
+          description={
+            confirmDialog.type === "leave"
+              ? "나가면 이 방 채팅과 일정에 다시 참여하려면 재입장이 필요합니다."
+              : confirmDialog.type === "delete"
+                ? "삭제하면 채팅, 일정, 멤버 정보가 모두 사라지며 복구할 수 없습니다."
+                : "추방된 멤버는 이 방에 다시 들어올 수 없습니다."
+          }
+          confirmLabel={
+            confirmDialog.type === "leave"
+              ? "나가기"
+              : confirmDialog.type === "kick"
+                ? "추방"
+                : "삭제"
+          }
+          variant="danger"
+          loading={confirmLoading}
+          onConfirm={() => void handleConfirmAction()}
+          onCancel={() => {
+            if (!confirmLoading) setConfirmDialog(null);
+          }}
+        />
+      )}
+
       {showHostSettings && (
         <div
           className="chat-modal-overlay"
@@ -675,7 +993,7 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
                 .map((m) => (
                   <div key={m.user!.id} className="chat-modal__member-row">
                     <span>{nickOf(m.user)}</span>
-                    <button type="button" className="chat-modal__kick" onClick={() => kickMember(m.user!.id)}>
+                    <button type="button" className="chat-modal__kick" onClick={() => setConfirmDialog({ type: "kick", userId: m.user!.id })}>
                       퇴출
                     </button>
                   </div>
@@ -686,7 +1004,7 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
             </div>
 
             <div className="chat-modal__actions chat-modal__actions--split">
-              <button type="button" className="chat-modal__danger" onClick={deleteRoom}>
+              <button type="button" className="chat-modal__danger" onClick={() => setConfirmDialog({ type: "delete" })}>
                 방 삭제
               </button>
               <div className="chat-modal__actions-right">

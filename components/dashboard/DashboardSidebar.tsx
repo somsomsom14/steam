@@ -12,7 +12,7 @@ const NAV: {
   { label: "대시보드", href: "/dashboard", icon: "grid" },
   { label: "방 찾기", href: "/rooms", icon: "search" },
   { label: "AI문의방", href: "/chat", icon: "chat" },
-  { label: "내 게임", href: "#", icon: "game", disabled: true },
+  { label: "내 팀", href: "/rooms/mine", icon: "game" },
 ];
 
 function NavIcon({ type }: { type: string }) {

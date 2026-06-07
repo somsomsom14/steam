@@ -40,7 +40,8 @@ export type AnalysisAgentInput = {
   multi_play_ratio: number;
   single_play_ratio: number;
   recent_2weeks_games: string[];
-  top_played_games: { name: string; hours: string }[];
+  /** 플레이 시간 순위 (1위부터, 최대 15개) */
+  top_played_games: { rank: number; name: string; hours: string }[];
   most_played_game: { name: string; hours: string } | null;
   least_played_game: { name: string; hours: string } | null;
   play_style_headline: string | null;
@@ -110,10 +111,15 @@ export function buildAnalysisAgentInput(
   const least_played_game =
     resolveLeastPlayed(analysis) ?? resolveLeastPlayedFromGames(rows, top?.appid);
 
-  const top_played_games = analysis.topGames.slice(0, 5).map((g) => ({
-    name: g.name,
-    hours: formatHoursCasual(g.playtimeForeverMinutes),
-  }));
+  const top_played_games = [...rows]
+    .filter((g) => g.playtime_forever > 0)
+    .sort((a, b) => b.playtime_forever - a.playtime_forever)
+    .slice(0, 15)
+    .map((g, index) => ({
+      rank: index + 1,
+      name: g.game_name ?? `App ${g.appid}`,
+      hours: formatHoursCasual(g.playtime_forever),
+    }));
 
   return {
     user_name: userName,

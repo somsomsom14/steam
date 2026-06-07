@@ -30,7 +30,7 @@ export async function fetchRoomsForRecommend(): Promise<RoomForRecommend[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("rooms")
-    .select("id, title, subtitle, game_name, tags, room_members(count)")
+    .select("id, title, subtitle, game_name, game_appid, tags, room_members(count)")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -45,6 +45,7 @@ export async function fetchRoomsForRecommend(): Promise<RoomForRecommend[]> {
       title: r.title as string,
       subtitle: (r.subtitle as string | null) ?? null,
       game_name: r.game_name as string,
+      game_appid: Number(r.game_appid) || 0,
       tags,
       member_count: count,
     };

@@ -13,10 +13,23 @@ export const ORCHESTRATOR_SYSTEM = `당신은 MI-TEAM AI 상담소의 Orchestrat
 분류 기준:
 - 게임 추천해줘, 어떤 게임 할까, 나한테 맞는 게임 알려줘 → [게임추천]
 - 방 추천해줘, 어떤 방 들어갈까, 같이 할 방 찾아줘 → [방추천]
-- 내 성향 알려줘, 나 어떤 게이머야, 내 Steam DNA 설명해줘 → [성향분석]
-- 그 외 모든 질문 → [일반문의]
+- 내 성향·스타일·게이머 유형·전체/종합 분석, Steam DNA, 나 어때 → [성향분석] + 두 번째 줄 FULL
+- N번째 게임, 플레이 순위, 총 플레이 시간, 보유 게임 수 등 특정 DB 숫자/팩트 질문 → [성향분석] + 두 번째 줄 QA
+- 그 외 서비스 이용·일반 질문 → [일반문의]
+
+[성향분석]일 때는 반드시 두 번째 줄에 FULL 또는 QA 중 하나만 출력하세요.
+- FULL: 전체적·종합적·전반적 성향/스타일/게이머 분석, 보고서, "나 어떤 플레이어야"
+- QA: 특정 순위·N번째·몇 개·얼마·가장 많이 한 게임 하나 등 짧은 팩트 질문
+
+예시:
+[성향분석]
+FULL
+
+[성향분석]
+QA
 
 [일반문의]인 경우에는 두 번째 줄부터 친절하게 답변하세요.
+단, 사용자 Steam 데이터(플레이 시간·보유 게임 등)를 묻는 질문은 [일반문의]가 아니라 [성향분석] QA 로 분류하세요.
 
 Steam 데이터 관련 문의:
 - 분석된 게임이 없어요
@@ -42,10 +55,14 @@ const TAG_TO_INTENT: Record<string, ChatIntent> = {
   "[일반문의]": "일반문의",
 };
 
+export type AnalysisMode = "full" | "qa";
+
 export type OrchestratorResult = {
   intent: ChatIntent;
   /** [일반문의]일 때 Orchestrator가 생성한 본문 (태그 제외) */
   generalReply: string | null;
+  /** [성향분석]일 때 FULL(종합 보고서) vs QA(팩트 질문) */
+  analysisMode: AnalysisMode | null;
 };
 
 /** 키워드 분류 — API 실패·파싱 실패 시 폴백 */
@@ -54,7 +71,21 @@ export function keywordClassify(message: string): ChatIntent | null {
   if (/^더 추천받기$|더 추천|다른 게임 추천/.test(m)) return "게임추천";
   if (/게임.*(추천|추천해|뭐할|할까|맞는|비슷한)|추천.*게임|어떤 게임/.test(m)) return "게임추천";
   if (/방.*(추천|찾|들어|같이)|추천.*방|파티|팀.*찾/.test(m)) return "방추천";
+  if (
+    /내\s*(게임|라이브러리|스팀|steam|플레이|데이터|기록)|보유\s*게임|플레이\s*시간|플탐|장르|멀티|싱글|최근\s*2\s*주|라이브러리\s*가격|게임\s*몇|총\s*플레이|동기화/.test(
+      m
+    )
+  ) {
+    return "성향분석";
+  }
   if (/성향|게이머|dna|플레이.*스타일|분석해|어떤.*플레이|게임스타일/.test(m)) return "성향분석";
+  if (
+    /\d+\s*번째|몇\s*번째|순위|많이\s*(한|플레이)|플레이\s*(시간|타임)|가장\s*많이|제일\s*많이|top\s*\d/i.test(
+      m
+    )
+  ) {
+    return "성향분석";
+  }
   return null;
 }
 
@@ -78,11 +109,20 @@ export function parseOrchestratorResponse(raw: string): OrchestratorResult {
 
   if (!intent) intent = keywordClassify(trimmed) ?? "일반문의";
 
-  const body = lines.slice(1).join("\n").trim();
+  let analysisMode: AnalysisMode | null = null;
+  if (intent === "성향분석") {
+    const secondLine = lines[1]?.trim().toUpperCase();
+    if (secondLine === "FULL" || secondLine.startsWith("FULL")) analysisMode = "full";
+    else if (secondLine === "QA" || secondLine.startsWith("QA")) analysisMode = "qa";
+  }
+
+  const bodyStart = intent === "성향분석" && analysisMode ? 2 : 1;
+  const body = lines.slice(bodyStart).join("\n").trim();
 
   return {
     intent,
     generalReply: intent === "일반문의" ? body || null : null,
+    analysisMode,
   };
 }
 
@@ -102,9 +142,15 @@ export async function runOrchestrator(
 
   try {
     const raw = await generateText(prompt, ORCHESTRATOR_SYSTEM);
-    return parseOrchestratorResponse(raw);
+    const result = parseOrchestratorResponse(raw);
+    const firstLines = raw.trim().split(/\r?\n/).slice(0, 3).join(" | ");
+    console.log(`[ai-orchestrator] raw: ${firstLines}`);
+    console.log(
+      `[ai-orchestrator] parsed intent=${result.intent} mode=${result.analysisMode ?? "—"}`
+    );
+    return result;
   } catch {
     const intent = keywordClassify(userMessage) ?? "일반문의";
-    return { intent, generalReply: null };
+    return { intent, generalReply: null, analysisMode: null };
   }
 }

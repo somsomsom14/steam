@@ -54,7 +54,6 @@ export default async function ChatPage({ searchParams }: PageProps) {
     <ChatClient
       displayName={displayName}
       avatarUrl={avatarUrl}
-      steamId={session.steamId}
       initialSessions={sessionList}
       initialSessionId={activeId ?? null}
       initialMessages={initialMessages}

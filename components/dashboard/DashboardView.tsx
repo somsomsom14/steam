@@ -62,7 +62,6 @@ function RadarAxisTick(props: {
 type Props = {
   displayName: string;
   avatarUrl: string;
-  steamId: string;
   analysis: DashboardAnalysis;
   fetchError?: string | null;
 };
@@ -115,7 +114,6 @@ type GenreChartItem = {
 export function DashboardView({
   displayName,
   avatarUrl,
-  steamId,
   analysis,
   fetchError,
 }: Props) {
@@ -170,9 +168,6 @@ export function DashboardView({
             />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{displayName}</div>
-              <div className="dashboard-topbar__id">
-                ID: <strong>{steamId.slice(-7)}</strong>
-              </div>
               <svg
                 className="dashboard-topbar__chevron"
                 width="16"

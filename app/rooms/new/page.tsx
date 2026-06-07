@@ -21,5 +21,5 @@ export default async function RoomNewPage() {
   const displayName = user ? resolveDisplayName(user) : "게이머";
   const avatarUrl = user ? resolveAvatarUrl(user) : "";
 
-  return <RoomNewClient games={games ?? []} displayName={displayName} avatarUrl={avatarUrl} steamId={session.steamId} />;
+  return <RoomNewClient games={games ?? []} displayName={displayName} avatarUrl={avatarUrl} />;
 }

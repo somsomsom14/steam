@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnalysisMessageBody } from "@/components/chat/AnalysisMessageBody";
 import { GameRecommendCards } from "@/components/chat/GameRecommendCards";
+import { RoomRecommendCards } from "@/components/chat/RoomRecommendCards";
 import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { splitAssistantContent } from "@/lib/ai/game-recommend-utils";
@@ -26,7 +27,6 @@ type ChatMessage = {
 type Props = {
   displayName: string;
   avatarUrl: string;
-  steamId: string;
   initialSessions: ChatSession[];
   initialSessionId: string | null;
   initialMessages: ChatMessage[];
@@ -64,7 +64,7 @@ function AssistantMessageBody({
   onMoreRecs: () => void;
   disabled?: boolean;
 }) {
-  const { text, games } = splitAssistantContent(content);
+  const { text, games, rooms } = splitAssistantContent(content);
 
   if (games && games.length > 0) {
     return (
@@ -77,13 +77,16 @@ function AssistantMessageBody({
     );
   }
 
+  if (rooms && rooms.length > 0) {
+    return <RoomRecommendCards intro={text} rooms={rooms} />;
+  }
+
   return <AnalysisMessageBody content={content} />;
 }
 
 export function ChatClient({
   displayName,
   avatarUrl,
-  steamId,
   initialSessions,
   initialSessionId,
   initialMessages,
@@ -407,9 +410,6 @@ export function ChatClient({
             <ProfileAvatar src={avatarUrl} alt="" className="dashboard-topbar__avatar" />
             <div className="dashboard-topbar__info">
               <div className="dashboard-topbar__name">{displayName}</div>
-              <div className="dashboard-topbar__id">
-                ID: <strong>{steamId.slice(-7)}</strong>
-              </div>
               <svg className="dashboard-topbar__chevron" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 10l5 5 5-5H7z" />
               </svg>

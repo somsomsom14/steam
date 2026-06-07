@@ -6,7 +6,8 @@ export async function batchProcess<T, R>(
   items: T[],
   processor: (item: T) => Promise<R>,
   concurrency = 3,
-  delayMs = 250
+  delayMs = 250,
+  onItemDone?: (done: number, total: number) => void
 ): Promise<(R | null)[]> {
   const results: (R | null)[] = [];
 
@@ -27,6 +28,7 @@ export async function batchProcess<T, R>(
         );
         results.push(null);
       }
+      onItemDone?.(results.length, items.length);
     }
 
     if (i + concurrency < items.length && delayMs > 0) {
