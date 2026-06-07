@@ -26,7 +26,7 @@ export function parseUserGame(row: {
   categories: unknown;
   tags?: unknown;
   playtime_forever: number | string | null;
-  playtime_2weeks: number | string | null;
+  playtime_2weeks?: number | string | null;
 }): UserGameRow {
   return {
     appid: row.appid,

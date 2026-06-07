@@ -55,7 +55,7 @@ function formatHoursCasual(minutes: number): string {
 function sumLibraryValueKrw(games: UserGameRecord[]): number {
   return games.reduce((sum, g) => {
     const price = g.store_price_krw;
-    if (price == null || price === "") return sum;
+    if (price == null) return sum;
     return sum + (Number(price) || 0);
   }, 0);
 }

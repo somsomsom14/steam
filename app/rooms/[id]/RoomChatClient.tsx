@@ -254,10 +254,24 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
         setOnlineIds(new Set(Object.values(state).flat().map((p) => p.userId)));
       })
       .on("presence", { event: "join" }, ({ newPresences }) => {
-        setOnlineIds((prev) => { const n = new Set(prev); newPresences.forEach((p: PresenceUser) => n.add(p.userId)); return n; });
+        setOnlineIds((prev) => {
+          const n = new Set(prev);
+          for (const p of newPresences) {
+            const id = (p as unknown as PresenceUser).userId;
+            if (id) n.add(id);
+          }
+          return n;
+        });
       })
       .on("presence", { event: "leave" }, ({ leftPresences }) => {
-        setOnlineIds((prev) => { const n = new Set(prev); leftPresences.forEach((p: PresenceUser) => n.delete(p.userId)); return n; });
+        setOnlineIds((prev) => {
+          const n = new Set(prev);
+          for (const p of leftPresences) {
+            const id = (p as unknown as PresenceUser).userId;
+            if (id) n.delete(id);
+          }
+          return n;
+        });
       });
 
     channel.subscribe(async (status) => {

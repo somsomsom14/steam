@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { verifySession } from "@/lib/session";
 import { resolveAvatarUrl, resolveDisplayName } from "@/lib/user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { normalizeRoomRows } from "@/lib/supabase-join";
 import { RoomsClient } from "./RoomsClient";
 
 type PageProps = {
@@ -36,7 +37,7 @@ export default async function RoomsPage({ searchParams }: PageProps) {
 
   return (
     <RoomsClient
-      initialRooms={initialRooms ?? []}
+      initialRooms={normalizeRoomRows(initialRooms ?? [])}
       displayName={displayName}
       avatarUrl={avatarUrl}
       ownedAppIds={ownedAppIds}

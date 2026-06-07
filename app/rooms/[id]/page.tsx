@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { verifySession } from "@/lib/session";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { unwrapJoin } from "@/lib/supabase-join";
 import { RoomChatClient } from "./RoomChatClient";
 import "../rooms.css";
 
@@ -14,11 +15,6 @@ type UserSnippet = {
   app_avatar_url: string | null;
   steam_avatar_url: string | null;
 };
-
-function unwrapJoin<T>(value: T | T[] | null | undefined): T | null {
-  if (value == null) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
 
 export default async function RoomPage({ params }: Params) {
   const { id } = await params;
