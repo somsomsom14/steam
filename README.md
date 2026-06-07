@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MI-TEAM
 
-## Getting Started
+Steam 라이브러리 기반 팀원 매칭 서비스. 스팀 로그인 → 게임 동기화 → 대시보드 분석 → AI 문의 → 게임별 방 채팅.
 
-First, run the development server:
+## 주요 기능
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Steam OpenID 로그인** 및 보유 게임·업적 동기화
+- **대시보드** 플레이타임·장르·성향 요약
+- **AI 문의** 게임 추천, 방 추천, 성향 분석 (Gemini)
+- **방** 게임별 팀 모집, 실시간 채팅, 일정, 공지
+
+## 기술 스택
+
+Next.js 16 · React 19 · Supabase · Google Gemini · Steam Web API
+
+## 사전 준비
+
+- Node.js 20+
+- [Supabase](https://supabase.com) 프로젝트
+- [Steam Web API Key](https://steamcommunity.com/dev/apikey)
+- [Google AI Studio](https://aistudio.google.com) Gemini API Key
+
+## 환경 변수
+
+프로젝트 루트에 `.env.local` 파일을 만듭니다.
+
+```env
+# 사이트 URL (배포 도메인, Steam OpenID callback에 사용)
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# 세션 JWT (32자 이상 랜덤 문자열)
+SESSION_SECRET=
+
+# Steam
+STEAM_API_KEY=
+
+# Gemini (선택: GEMINI_MODEL, 기본 gemini-2.5-flash-lite)
+GEMINI_API_KEY=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 로컬 실행
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+브라우저에서 [http://localhost:3000](http://localhost:3000) 접속.
 
-## Learn More
+## Supabase 설정
 
-To learn more about Next.js, take a look at the following resources:
+1. SQL Editor에서 `supabase_schema.sql` 실행 (최초 1회)
+2. `supabase/migrations/` 아래 SQL을 **파일명 순서대로** 실행
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| 순서 | 파일 |
+|------|------|
+| 1 | `20260603_rooms.sql` |
+| 2 | `20260604_avatars_storage.sql` |
+| 3 | `20260605_schedule_participants.sql` |
+| 4 | `20260606_chat.sql` |
+| 5 | `20260607_user_games_store_price.sql` |
+| 6 | `20260608_room_chat_attachments.sql` |
+| 7 | `20260609_chat_rls_lockdown.sql` |
+| 8 | `20260610_user_data_rls_lockdown.sql` |
+| 9 | `20260611_room_messages_rls_lockdown.sql` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Storage 버킷: `avatars`, `room-chat` (마이그레이션에서 생성)
 
-## Deploy on Vercel
+## 배포
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Vercel (권장)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. GitHub 저장소 연결
+2. 환경 변수 전부 등록 (`NEXT_PUBLIC_*` 포함)
+3. `NEXT_PUBLIC_SITE_URL`을 배포 URL로 설정
+4. Steam OpenID callback: `{SITE_URL}/api/auth/steam/callback`
+
+### Node 서버
+
+```bash
+npm run build
+npm start
+```
+
+포트 기본값 3000. `NEXT_PUBLIC_SITE_URL`은 실제 접속 도메인과 일치해야 합니다.
+
+## 프로젝트 구조
+
+```
+app/              페이지 및 API Route
+components/       UI 컴포넌트
+lib/              Steam·AI·Supabase·세션 로직
+public/images/    랜딩·기본 아바타 이미지
+supabase/         DB 마이그레이션
+```
+
+## 보안 참고
+
+- 민감 API는 서버 Route + `SUPABASE_SERVICE_ROLE_KEY` 사용
+- `chat_*`, `users`, `user_games`, `room_messages` 테이블은 anon 직접 접근 차단 (RLS)
+- `.env.local`은 Git에 커밋하지 않음

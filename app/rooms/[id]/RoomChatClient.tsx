@@ -78,6 +78,7 @@ type Props = {
 };
 
 const SCHEDULES_PER_PAGE = 3;
+const MESSAGE_POLL_MS = 3000;
 
 /* ---- Helpers ---- */
 function nickOf(u: UserSnippet | null) {
@@ -116,6 +117,21 @@ function isImageMessage(msg: Message) {
 function sortSchedulesDesc(list: Schedule[]) {
   return [...list].sort(
     (a, b) => new Date(b.target_time).getTime() - new Date(a.target_time).getTime()
+  );
+}
+
+function mergePolledMessages(prev: Message[], incoming: Message[], userMapRef: Map<string, UserSnippet>) {
+  const byId = new Map(prev.map((m) => [m.id, m]));
+  for (const raw of incoming) {
+    const m = normalizeMessage(raw);
+    const existing = byId.get(m.id);
+    byId.set(m.id, {
+      ...m,
+      user: m.user ?? existing?.user ?? userMapRef.get(m.user_id) ?? null,
+    });
+  }
+  return [...byId.values()].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 }
 
@@ -202,16 +218,25 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
   }, []);
   useEffect(() => { scrollBottom(); }, [messages, scrollBottom]);
 
-  /* ---- Realtime ---- */
+  /* ---- Realtime (presence, room notice/delete) + message polling ---- */
   useEffect(() => {
-    const channel = supabase.channel(`room:${room.id}`, { config: { presence: { key: currentUserId } } });
+    let cancelled = false;
 
-    channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "room_messages", filter: `room_id=eq.${room.id}` }, (payload) => {
-      const m = normalizeMessage(payload.new as Message);
-      setMessages((prev) =>
-        prev.some((x) => x.id === m.id) ? prev : [...prev, { ...m, user: userMap.current.get(m.user_id) ?? null }]
-      );
-    });
+    async function refreshMessages() {
+      try {
+        const res = await fetch(`/api/rooms/${room.id}/messages`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as Message[];
+        setMessages((prev) => mergePolledMessages(prev, data, userMap.current));
+      } catch {
+        // ignore transient poll errors
+      }
+    }
+
+    void refreshMessages();
+    const pollTimer = window.setInterval(refreshMessages, MESSAGE_POLL_MS);
+
+    const channel = supabase.channel(`room:${room.id}`, { config: { presence: { key: currentUserId } } });
 
     channel.on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${room.id}` }, (payload) => {
       const u = payload.new as Room;
@@ -239,7 +264,11 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
       if (status === "SUBSCRIBED") await channel.track({ userId: currentUser.id, nickname: currentUser.nickname, avatar: currentUser.avatar });
     });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollTimer);
+      supabase.removeChannel(channel);
+    };
   }, [room.id, currentUserId, currentUser, supabase, router]);
 
   /* ---- Actions ---- */
@@ -253,6 +282,12 @@ export function RoomChatClient({ room, currentUserId, currentUser, initialMember
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(data.error ?? "메시지 전송에 실패했습니다.");
     }
+    const data = normalizeMessage((await res.json()) as Message);
+    setMessages((prev) =>
+      prev.some((x) => x.id === data.id)
+        ? prev
+        : [...prev, { ...data, user: data.user ?? userMap.current.get(data.user_id) ?? null }]
+    );
   }
 
   async function sendMessage() {

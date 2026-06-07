@@ -37,7 +37,12 @@ export default async function ChatPage({ searchParams }: PageProps) {
   const displayName = user ? resolveDisplayName(user) : "게이머";
   const avatarUrl = user ? resolveAvatarUrl(user) : "";
 
-  let initialMessages: { id: string; role: string; content: string; created_at: string }[] = [];
+  let initialMessages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    created_at: string;
+  }[] = [];
   const sessionList = sessions ?? [];
   const activeId = sessionList[0]?.id;
 
@@ -47,7 +52,12 @@ export default async function ChatPage({ searchParams }: PageProps) {
       .select("id, role, content, created_at")
       .eq("session_id", activeId)
       .order("created_at", { ascending: true });
-    initialMessages = messages ?? [];
+    initialMessages = (messages ?? []).map((m) => ({
+      id: m.id,
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
+      created_at: m.created_at,
+    }));
   }
 
   return (

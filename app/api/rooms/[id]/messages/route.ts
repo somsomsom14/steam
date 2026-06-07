@@ -5,12 +5,35 @@ import { createSupabaseServerClient } from "@/lib/supabase";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const MESSAGE_SELECT = `id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`;
+
+async function requireRoomMember(roomId: string, userId: string) {
+  const supabase = createSupabaseServerClient();
+  const { data: member } = await supabase
+    .from("room_members")
+    .select("user_id")
+    .eq("room_id", roomId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!member;
+}
+
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id } = await params;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("session")?.value;
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await verifySession(token);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!(await requireRoomMember(id, session.userId))) {
+    return NextResponse.json({ error: "방 멤버가 아닙니다." }, { status: 403 });
+  }
+
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("room_messages")
-    .select(`id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
+    .select(MESSAGE_SELECT)
     .eq("room_id", id)
     .order("created_at", { ascending: true })
     .limit(100);
@@ -26,9 +49,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const session = await verifySession(token);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (!(await requireRoomMember(id, session.userId))) {
+    return NextResponse.json({ error: "방 멤버가 아닙니다." }, { status: 403 });
+  }
+
   const supabase = createSupabaseServerClient();
-  const { data: member } = await supabase.from("room_members").select("user_id").eq("room_id", id).eq("user_id", session.userId).maybeSingle();
-  if (!member) return NextResponse.json({ error: "방 멤버가 아닙니다." }, { status: 403 });
 
   const body = await req.json();
   const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -53,7 +78,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       message_type: messageType,
       attachment_url: messageType === "image" ? attachmentUrl : null,
     })
-    .select(`id, room_id, user_id, message, message_type, attachment_url, created_at, user:users!user_id(app_nickname, steam_nickname, app_avatar_url, steam_avatar_url)`)
+    .select(MESSAGE_SELECT)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

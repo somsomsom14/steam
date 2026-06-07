@@ -8,6 +8,18 @@ import "../rooms.css";
 
 type Params = { params: Promise<{ id: string }> };
 
+type UserSnippet = {
+  app_nickname: string | null;
+  steam_nickname: string | null;
+  app_avatar_url: string | null;
+  steam_avatar_url: string | null;
+};
+
+function unwrapJoin<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
 export default async function RoomPage({ params }: Params) {
   const { id } = await params;
 
@@ -64,7 +76,11 @@ export default async function RoomPage({ params }: Params) {
   ]);
 
   const schedules = schedulesRaw ?? [];
-  let initialSchedules = schedules.map((s) => ({ ...s, participants: [] as { user_id: string; user: { app_nickname: string | null; steam_nickname: string | null } | null }[] }));
+  let initialSchedules = schedules.map((s) => ({
+    ...s,
+    creator: unwrapJoin(s.creator) as { app_nickname: string | null; steam_nickname: string | null } | null,
+    participants: [] as { user_id: string; user: { app_nickname: string | null; steam_nickname: string | null } | null }[],
+  }));
   if (schedules.length > 0) {
     const { data: participantRows } = await supabase
       .from("room_schedule_participants")
@@ -74,11 +90,35 @@ export default async function RoomPage({ params }: Params) {
     for (const row of participantRows ?? []) {
       const sid = row.schedule_id as string;
       const list = bySchedule.get(sid) ?? [];
-      list.push({ user_id: row.user_id as string, user: row.user as { app_nickname: string | null; steam_nickname: string | null } | null });
+      list.push({
+        user_id: row.user_id as string,
+        user: unwrapJoin(row.user) as { app_nickname: string | null; steam_nickname: string | null } | null,
+      });
       bySchedule.set(sid, list);
     }
-    initialSchedules = schedules.map((s) => ({ ...s, participants: bySchedule.get(s.id) ?? [] }));
+    initialSchedules = schedules.map((s) => ({
+      ...s,
+      creator: unwrapJoin(s.creator) as { app_nickname: string | null; steam_nickname: string | null } | null,
+      participants: bySchedule.get(s.id) ?? [],
+    }));
   }
+
+  const normalizedMembers = (members ?? []).map((m) => ({
+    role: (m.role === "host" ? "host" : "member") as "host" | "member",
+    joined_at: m.joined_at as string,
+    user: unwrapJoin(m.user) as ({ id: string } & UserSnippet) | null,
+  }));
+
+  const normalizedMessages = (initialMessages ?? []).map((m) => ({
+    id: m.id as string,
+    room_id: m.room_id as string,
+    user_id: m.user_id as string,
+    message: m.message as string,
+    message_type: (m.message_type === "image" ? "image" : "text") as "text" | "image",
+    attachment_url: (m.attachment_url as string | null) ?? null,
+    created_at: m.created_at as string,
+    user: unwrapJoin(m.user) as UserSnippet | null,
+  }));
 
   return (
     <RoomChatClient
@@ -89,8 +129,8 @@ export default async function RoomPage({ params }: Params) {
         nickname: currentUser?.app_nickname || currentUser?.steam_nickname || "게이머",
         avatar: currentUser?.app_avatar_url || currentUser?.steam_avatar_url || "",
       }}
-      initialMembers={members ?? []}
-      initialMessages={initialMessages ?? []}
+      initialMembers={normalizedMembers}
+      initialMessages={normalizedMessages}
       initialSchedules={initialSchedules}
     />
   );

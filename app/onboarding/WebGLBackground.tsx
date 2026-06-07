@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Material, Mesh, OrthographicCamera } from "three";
 
 export function WebGLBackground() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,11 +117,11 @@ export function WebGLBackground() {
 
       function generateHouse() {
         while (architectureGroup.children.length > 0) {
-          const child = architectureGroup.children[0] as THREE.Mesh;
+          const child = architectureGroup.children[0] as Mesh;
           architectureGroup.remove(child);
           child.geometry?.dispose();
           if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-          else (child.material as THREE.Material)?.dispose();
+          else (child.material as Material)?.dispose();
         }
         blocks = [];
 
@@ -270,10 +271,10 @@ export function WebGLBackground() {
         const w = container.clientWidth;
         const h = container.clientHeight;
         const a = w / h;
-        (camera as THREE.OrthographicCamera).left = (-frustumSize * a) / 2;
-        (camera as THREE.OrthographicCamera).right = (frustumSize * a) / 2;
-        (camera as THREE.OrthographicCamera).top = frustumSize / 2;
-        (camera as THREE.OrthographicCamera).bottom = -frustumSize / 2;
+        (camera as OrthographicCamera).left = (-frustumSize * a) / 2;
+        (camera as OrthographicCamera).right = (frustumSize * a) / 2;
+        (camera as OrthographicCamera).top = frustumSize / 2;
+        (camera as OrthographicCamera).bottom = -frustumSize / 2;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
       };
