@@ -1,18 +1,15 @@
 import { GoogleGenerativeAI, type Content, type GenerativeModel } from "@google/generative-ai";
 import type { ChatHistoryMessage } from "./types";
 
-/** 프로젝트에서 실제 사용 가능한 모델 (2.0-lite·1.5 계열은 429/404) */
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const FALLBACK_MODEL = "gemini-2.5-flash";
+/** 고정 모델 (2.5 계열 오류 회피) */
+const GEMINI_MODEL_ID = "gemini-1.5-flash";
 const API_TIMEOUT_MS = 45_000;
 
 export function getGeminiModelChain(): string[] {
-  const primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
-  if (primary === FALLBACK_MODEL) return [primary];
-  return [primary, FALLBACK_MODEL];
+  return [GEMINI_MODEL_ID];
 }
 
-export const GEMINI_MODEL = getGeminiModelChain()[0];
+export const GEMINI_MODEL = GEMINI_MODEL_ID;
 
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -79,8 +76,8 @@ export function toUserFacingGeminiError(err: unknown, model?: string): Error {
 
   if (isModelUnavailable(raw)) {
     return new Error(
-      `설정된 AI 모델을 사용할 수 없습니다.${modelNote}\n` +
-        `.env.local 에 GEMINI_MODEL=gemini-2.5-flash-lite 또는 gemini-2.5-flash 를 설정해 주세요.`
+      `설정된 AI 모델(${GEMINI_MODEL_ID})을 사용할 수 없습니다.${modelNote}\n` +
+        `Google AI Studio에서 API 키와 모델 사용 가능 여부를 확인해 주세요.`
     );
   }
 

@@ -39,7 +39,7 @@ SESSION_SECRET=
 # Steam
 STEAM_API_KEY=
 
-# Gemini (선택: GEMINI_MODEL, 기본 gemini-2.5-flash-lite)
+# Gemini (코드에서 gemini-1.5-flash 고정)
 GEMINI_API_KEY=
 ```
 
