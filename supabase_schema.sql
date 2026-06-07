@@ -60,4 +60,4 @@ CREATE INDEX IF NOT EXISTS idx_user_achievements_appid   ON public.user_achievem
 
 -- 프로필 이미지 Storage 버킷: supabase/migrations/20260604_avatars_storage.sql 실행
 -- AI 문의방: supabase/migrations/20260606_chat.sql 실행
--- 환경 변수: GEMINI_API_KEY (gemini-2.5-flash → 1.5-flash 폴백)
+-- 환경 변수: GEMINI_API_KEY (gemini-2.5-flash-lite → 2.5-flash 폴백)

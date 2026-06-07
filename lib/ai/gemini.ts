@@ -1,9 +1,9 @@
 import { GoogleGenerativeAI, type Content, type GenerativeModel } from "@google/generative-ai";
 import type { ChatHistoryMessage } from "./types";
 
-/** 1순위 gemini-2.5-flash → 실패 시 gemini-1.5-flash */
-const PRIMARY_MODEL = "gemini-2.5-flash";
-const FALLBACK_MODEL = "gemini-1.5-flash";
+/** 1순위 gemini-2.5-flash-lite → 실패 시 gemini-2.5-flash */
+const PRIMARY_MODEL = "gemini-2.5-flash-lite";
+const FALLBACK_MODEL = "gemini-2.5-flash";
 const API_TIMEOUT_MS = 45_000;
 
 export function getGeminiModelChain(): string[] {
